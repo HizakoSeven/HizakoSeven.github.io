@@ -1,4 +1,4 @@
-/* Camada de persistencia: window.storage (artifact), servidor local (server.ps1) e File System Access API. */
+/* Camada de persistencia: IndexedDB (site publicado), window.storage (artifact) e servidor local (server.ps1), mais backup manual em .json. */
 import { renderPartidas } from './partidas.js';
 import { renderErros } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
@@ -119,11 +119,11 @@ export function renderStorageStatus(){
   if(state.storageOk){
     el.className = 'storage-status ok';
     el.textContent = (STORAGE_BACKEND==='idb')
-      ? '✓ salvando automaticamente neste navegador (só você vê esses dados). Pra não perder nada, use "Salvar arquivo" de vez em quando como backup.'
+      ? '✓ Salvamento automático ativo — tudo que você registra já fica salvo neste navegador.'
       : '✓ armazenamento automático ativo — o que você registrar aqui fica salvo.';
   } else {
     el.className = 'storage-status bad';
-    el.textContent = '⚠ não consegui usar o armazenamento do navegador (modo anônimo ou bloqueado?). Use os botões "Salvar arquivo" / "Carregar arquivo" logo abaixo — funcionam em qualquer navegador.';
+    el.textContent = '⚠ não consegui usar o armazenamento do navegador (modo anônimo ou bloqueado?). Use "Baixar backup" / "Carregar backup" logo abaixo pra não perder seus dados.';
   }
 }
 
@@ -139,23 +139,6 @@ export function currentAppStateBlob(){
     meuNick: state.meuNick,
     motorConfig: state.motorConfig
   };
-}
-
-export var fsHandle = null;
-
-export async function writeToHandle(){
-  if(!fsHandle) return false;
-  try{
-    var writable = await fsHandle.createWritable();
-    await writable.write(JSON.stringify(currentAppStateBlob(), null, 2));
-    await writable.close();
-    return true;
-  }catch(err){
-    showToast('Falha ao salvar no arquivo automático — use "Salvar arquivo" manualmente por enquanto.');
-    fsHandle = null;
-    document.getElementById('saveBarInfo').textContent = 'nenhum arquivo conectado ainda';
-    return false;
-  }
 }
 
 export async function saveToLocalServer(){
@@ -189,9 +172,7 @@ export async function persist(){
     if(!okLocal){ warnStorageFailure(); }
     return okLocal;
   }
-  var ok = await saveJSON(APP_STATE_KEY, currentAppStateBlob());
-  if(fsHandle){ await writeToHandle(); }
-  return ok;
+  return await saveJSON(APP_STATE_KEY, currentAppStateBlob());
 }
 
 export function downloadJSON(obj, filename){
@@ -206,63 +187,18 @@ export function downloadJSON(obj, filename){
   URL.revokeObjectURL(url);
 }
 
-export var fsSupported = ('showOpenFilePicker' in window) && ('showSaveFilePicker' in window);
-
-if(!fsSupported){
-  document.getElementById('fsOpenBtn').disabled = true;
-  document.getElementById('fsCreateBtn').disabled = true;
-  document.getElementById('fsUnsupportedNote').style.display = 'block';
-}
-
-document.getElementById('fsOpenBtn').addEventListener('click', async function(){
-  try{
-    var handles = await window.showOpenFilePicker({
-      types: [{ description:'Caderno de Xadrez (JSON)', accept:{'application/json':['.json']} }],
-      excludeAcceptAllOption:false, multiple:false
-    });
-    var handle = handles[0];
-    var file = await handle.getFile();
-    var text = await file.text();
-    var parsed = JSON.parse(text);
-    applyStateBlob(parsed);
-    fsHandle = handle;
-    await persist();
-    sincronizarControlesMotor();
-    renderHeaderStats(); renderHoje(); renderErros(); renderRevisar(); renderPartidas();
-    document.getElementById('saveBarInfo').textContent = 'salvando automaticamente em "'+handle.name+'"';
-    showToast('Arquivo conectado — a partir de agora, cada mudança salva sozinha nele.');
-  }catch(err){
-    if(err && err.name !== 'AbortError'){ showToast('Não consegui abrir esse arquivo.'); }
-  }
-});
-
-document.getElementById('fsCreateBtn').addEventListener('click', async function(){
-  try{
-    var handle = await window.showSaveFilePicker({
-      suggestedName: 'caderno-de-xadrez.json',
-      types: [{ description:'Caderno de Xadrez (JSON)', accept:{'application/json':['.json']} }]
-    });
-    fsHandle = handle;
-    await persist();
-    document.getElementById('saveBarInfo').textContent = 'salvando automaticamente em "'+handle.name+'"';
-    showToast('Arquivo criado — a partir de agora, cada mudança salva sozinha nele.');
-  }catch(err){
-    if(err && err.name !== 'AbortError'){ showToast('Não consegui criar o arquivo.'); }
-  }
-});
-
 document.getElementById('saveFileBtn').addEventListener('click', function(){
   downloadJSON(currentAppStateBlob(), 'caderno-de-xadrez-'+todayStr()+'.json');
   var now = new Date();
-  document.getElementById('saveBarInfo').textContent = 'salvo agora, '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
-  showToast('Arquivo salvo. Guarde-o pra carregar na próxima vez.');
+  document.getElementById('saveBarInfo').textContent = 'backup baixado às '+now.toLocaleTimeString('pt-BR',{hour:'2-digit',minute:'2-digit'});
+  showToast('Backup baixado. Guarde o arquivo pra carregar depois, se precisar.');
 });
 
 document.getElementById('loadFileInput').addEventListener('change', function(e){
   var file = e.target.files[0];
   e.target.value = '';
   if(!file) return;
-  if(!confirm('Isso vai substituir os dados atuais do caderno pelos dados desse arquivo. Continuar?')) return;
+  if(!confirm('Isso vai substituir os dados atuais do caderno pelos do backup. Continuar?')) return;
   var reader = new FileReader();
   reader.onload = async function(evt){
     try{
@@ -276,10 +212,10 @@ document.getElementById('loadFileInput').addEventListener('change', function(e){
       renderErros();
       renderRevisar();
       renderPartidas();
-      document.getElementById('saveBarInfo').textContent = 'carregado de arquivo agora';
+      document.getElementById('saveBarInfo').textContent = 'backup carregado agora';
       showToast('Caderno carregado: '+state.erros.length+' erros, '+state.partidas.length+' partidas.');
     }catch(err){
-      showToast('Não consegui ler esse arquivo — confira se é o .json exportado por aqui.');
+      showToast('Não consegui ler esse backup — confira se é o .json baixado por aqui.');
     }
   };
   reader.readAsText(file);

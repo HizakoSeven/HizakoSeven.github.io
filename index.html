@@ -83,6 +83,7 @@
   .storage-status.ok{background:transparent;color:var(--sage);padding:0 0 0;}
   .storage-status.bad{background:#F3E2DD;color:var(--flag-red);border:1px solid var(--flag-red);}
   .save-bar{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-2);}
+  .storage-status.ok{font-weight:600;}
   .save-bar-group-label{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
   .save-bar-info{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);display:block;margin-bottom:var(--sp-4);}
   .fatal-banner{
@@ -360,20 +361,14 @@
     </p>
     <p class="storage-status" id="storageStatus" style="display:none;"></p>
     <div class="save-bar">
-      <span class="save-bar-group-label">Automático (Chrome/Edge):</span>
-      <button class="btn btn-primary btn-sm" id="fsOpenBtn">📂 Abrir meu arquivo</button>
-      <button class="btn btn-ghost btn-sm" id="fsCreateBtn">🆕 Criar arquivo novo</button>
-    </div>
-    <p class="storage-status bad" id="fsUnsupportedNote" style="display:none;">Esse navegador/ambiente não permite salvar automaticamente num arquivo — use as opções manuais abaixo.</p>
-    <div class="save-bar">
-      <span class="save-bar-group-label">Manual (qualquer navegador):</span>
-      <button class="btn btn-ghost btn-sm" id="saveFileBtn">💾 Salvar arquivo</button>
+      <span class="save-bar-group-label">Backup (opcional):</span>
+      <button class="btn btn-ghost btn-sm" id="saveFileBtn">💾 Baixar backup</button>
       <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">
-        Carregar arquivo
+        Carregar backup
         <input type="file" id="loadFileInput" accept=".json" style="display:none;">
       </label>
+      <span class="save-bar-info" id="saveBarInfo" style="display:inline;margin:0;"></span>
     </div>
-    <span class="save-bar-info" id="saveBarInfo">nenhum arquivo conectado ainda</span>
     <nav class="tabs" role="tablist">
       <button class="tab-btn active" data-tab="hoje" role="tab">Hoje</button>
       <button class="tab-btn" data-tab="plano" role="tab">Plano</button>
@@ -696,7 +691,7 @@
   </main>
 
   <footer>
-    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 4</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
+    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 5</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
   </footer>
 
 </div>

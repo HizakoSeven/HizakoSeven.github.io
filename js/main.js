@@ -105,7 +105,6 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
 export async function initApp(){
   if(LOCAL_SERVER_MODE){
     document.querySelectorAll('.save-bar').forEach(function(el){ el.style.display='none'; });
-    var noteEl = document.getElementById('fsUnsupportedNote'); if(noteEl) noteEl.style.display='none';
     var infoEl = document.getElementById('saveBarInfo');
     infoEl.style.display = 'block';
     infoEl.textContent = 'salvando automaticamente em dados.json, na pasta do programa';
