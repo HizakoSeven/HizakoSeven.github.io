@@ -1,19 +1,15 @@
-
 # Caderno de Xadrez
 
 App gratuito de estudo de xadrez que roda inteiro no navegador: caderno de erros, revisão espaçada, importação de PGN (Chess.com/Lichess), análise completa com Stockfish e gráfico de tempo × erro por lance.
 
 **Use online:** https://hizakoseven.github.io/
 
-
-<img width="854" height="480" alt="2026-10-03 17-02-13 (online-video-cutter com)" src="https://github.com/user-attachments/assets/4c35bd40-b764-4d38-8288-e98ff70f17a4" />
-
 ## Seus dados
 Tudo fica salvo **no seu próprio navegador** (IndexedDB). Nada é enviado a servidor nenhum. Use os botões "Salvar arquivo" / "Carregar arquivo" no topo para fazer backup ou levar seus dados para outro navegador/computador.
 
 ## Rodar localmente
-Opção 1 (Windows): `iniciar.bat` + `server.ps1` (versão original, salva em `dados.json`).
-Opção 2: qualquer servidor estático na pasta, ex. `python -m http.server 8000` e abra `http://localhost:8000`.
+Opção 1: qualquer servidor estático na pasta, ex. `python -m http.server 8000`, e abra `http://localhost:8000`. Os dados ficam no navegador (IndexedDB), como no site publicado; use "Baixar/Carregar" para backup.
+Opção 2 (Windows, opcional): `iniciar.bat` + `server.ps1`, se você tiver esses arquivos localmente (não estão neste repositório). O app só entra no modo "salvar em `dados.json`" se o servidor responder em `/dados`; caso contrário usa o navegador.
 
 ## Estrutura
 ```

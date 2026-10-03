@@ -13,8 +13,19 @@ import { escapeHtml, formatPtDate, showToast, todayStr } from './utils.js';
 var painelGameId = null;
 var painelPly = null;
 
+var viewerTab = 'lances';
+var ultimoTotalPartidas = null;
+
 export function renderPartidas(){
   var wrap = document.getElementById('partidasListWrap');
+  /* "Importar" fica aberto enquanto nao ha partidas; depois de importar (ou ao reabrir o app com partidas), recolhe */
+  var det = document.getElementById('importDetails');
+  var total = state.partidas.length;
+  if(det){
+    if(ultimoTotalPartidas===null) det.open = total===0;
+    else if(total>ultimoTotalPartidas) det.open = false;
+  }
+  ultimoTotalPartidas = total;
   if(state.partidas.length===0){
     wrap.innerHTML = '<div class="empty-state">Nenhuma partida importada ainda.</div>';
     return;
@@ -64,8 +75,14 @@ export function renderPartidas(){
 export function openGame(id){
   state.openGameId = id;
   state.currentPly = 0;
-  state.boardFlipped = false;
+  var g = state.partidas.find(function(x){ return x.id===id; });
+  state.boardFlipped = !!(g && g.meuLado==='b'); /* como Lichess/Chess.com: seu lado embaixo */
   renderPartidas();
+  var slot = document.getElementById('viewerSlot-'+id);
+  if(slot){
+    var reduz = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    slot.scrollIntoView({ block:'start', behavior: reduz ? 'auto' : 'smooth' });
+  }
 }
 
 export function closeGame(){
@@ -79,31 +96,39 @@ export function renderViewer(){
   var wrap = document.getElementById('viewerSlot-'+game.id);
   if(!wrap) return;
 
-  var h = game.headers||{};
   wrap.innerHTML =
-    '<div class="card">'+
-      '<div id="ladoPickerWrap"></div>'+
-      '<label for="notaGeralInput">Nota geral dessa partida</label>'+
-      '<textarea id="notaGeralInput" placeholder="ex: senti dificuldade em finais de torre" style="min-height:50px;">'+escapeHtml(game.notaGeral||'')+'</textarea>'+
-      '<div class="viewer">'+
-        '<div class="board-wrap">'+
-          '<div class="board" id="boardEl"></div>'+
+    '<div class="card viewer-card">'+
+      '<div class="viewer-top">'+
+        '<div id="ladoPickerWrap"></div>'+
+        '<input type="text" id="notaGeralInput" placeholder="Nota geral dessa partida (ex: senti dificuldade em finais de torre)" value="'+escapeHtml(game.notaGeral||'')+'">'+
+      '</div>'+
+      '<div class="game-layout">'+
+        '<div class="game-board-col">'+
+          '<div class="player-strip" id="stripTop"></div>'+
+          '<div class="board-wrap"><div class="board" id="boardEl"></div></div>'+
+          '<div class="player-strip" id="stripBottom"></div>'+
           '<div class="board-controls">'+
-            '<button class="btn btn-ghost btn-sm" id="stepFirst">⏮</button>'+
-            '<button class="btn btn-ghost btn-sm" id="stepPrev">◀</button>'+
-            '<button class="btn btn-ghost btn-sm" id="stepNext">▶</button>'+
-            '<button class="btn btn-ghost btn-sm" id="stepLast">⏭</button>'+
-            '<button class="btn btn-ghost btn-sm" id="flipBtn">Girar tabuleiro</button>'+
+            '<button class="btn btn-ghost btn-sm" id="stepFirst" title="Início (Home)">⏮</button>'+
+            '<button class="btn btn-ghost btn-sm" id="stepPrev" title="Lance anterior (←)">◀</button>'+
+            '<button class="btn btn-ghost btn-sm" id="stepNext" title="Próximo lance (→)">▶</button>'+
+            '<button class="btn btn-ghost btn-sm" id="stepLast" title="Fim (End)">⏭</button>'+
+            '<button class="btn btn-ghost btn-sm" id="flipBtn" title="Girar tabuleiro">⇅ Girar</button>'+
           '</div>'+
           '<div class="move-status" id="moveStatus"></div>'+
         '</div>'+
-        '<div class="viewer-side">'+
-          '<div class="movelist" id="movelistEl"></div>'+
-          '<div id="analiseMotorWrap"></div>'+
-          '<div class="quick-erro-panel" id="quickErroPanel"></div>'+
-        '</div>'+
+        '<div class="game-side"><div class="game-side-inner">'+
+          '<div class="side-tabs" role="tablist">'+
+            '<button class="side-tab" data-vtab="lances" role="tab">Lances</button>'+
+            '<button class="side-tab" data-vtab="analise" role="tab">Análise</button>'+
+            '<button class="side-tab" data-vtab="erro" role="tab">Erro</button>'+
+            '<button class="side-tab" data-vtab="tempo" role="tab">Tempo</button>'+
+          '</div>'+
+          '<div class="side-pane" data-pane="lances"><div class="movelist" id="movelistEl"></div></div>'+
+          '<div class="side-pane" data-pane="analise"><div id="analiseMotorWrap"></div></div>'+
+          '<div class="side-pane" data-pane="erro"><div class="quick-erro-panel" id="quickErroPanel"></div></div>'+
+          '<div class="side-pane" data-pane="tempo"><div id="tempoAnaliseWrap"></div></div>'+
+        '</div></div>'+
       '</div>'+
-      '<div id="tempoAnaliseWrap"></div>'+
     '</div>';
 
   document.getElementById('stepFirst').addEventListener('click', function(){ stepTo(0); });
@@ -115,13 +140,73 @@ export function renderViewer(){
     game.notaGeral = e.target.value.trim();
     await persist();
   });
+  wrap.querySelectorAll('[data-vtab]').forEach(function(btn){
+    btn.addEventListener('click', function(){ viewerTab = btn.dataset.vtab; aplicarAbaViewer(); });
+  });
 
   renderLadoPicker(game);
   renderMovelist(game);
   renderAnaliseMotorUI(game);
   renderPainelTempo(game);
   painelGameId = null; /* o HTML do viewer acabou de ser recriado: o painel precisa ser pintado */
+  aplicarAbaViewer();
   stepTo(state.currentPly, true);
+}
+
+/* ---------- Painel lateral em abas ---------- */
+function aplicarAbaViewer(){
+  document.querySelectorAll('[data-vtab]').forEach(function(b){ b.classList.toggle('active', b.dataset.vtab===viewerTab); });
+  document.querySelectorAll('[data-pane]').forEach(function(p){ p.classList.toggle('active', p.dataset.pane===viewerTab); });
+  if(viewerTab==='lances') centralizarLanceAtual();
+}
+
+/* Marcadores nas abas: erro ja registrado no lance atual, analise feita. */
+function atualizarRotulosAbas(game){
+  var tErro = document.querySelector('[data-vtab="erro"]');
+  if(tErro){
+    var ex = state.currentPly>0 && state.erros.some(function(e){ return e.gameId===game.id && e.ply===state.currentPly; });
+    tErro.textContent = ex ? 'Erro ●' : 'Erro';
+  }
+  var tAn = document.querySelector('[data-vtab="analise"]');
+  if(tAn) tAn.textContent = game.analiseMotor ? 'Análise ✓' : 'Análise';
+}
+
+/* Mantem o lance atual visivel dentro da lista, rolando so a lista (nunca a pagina). */
+function centralizarLanceAtual(){
+  var lista = document.getElementById('movelistEl');
+  if(!lista || !lista.clientHeight) return;
+  var cur = lista.querySelector('.move-btn.current');
+  if(!cur) { lista.scrollTop = 0; return; }
+  lista.scrollTop = Math.max(0, cur.offsetTop - lista.clientHeight/2 + cur.offsetHeight/2);
+}
+
+/* ---------- Faixas de jogador (nome, rating, relogio), como Chess.com ---------- */
+function relogioDe(game, ply, cor){
+  for(var p=ply;p>=1;p--){
+    var m = game.applied[p-1];
+    if(m && m.color===cor && m.clk){
+      var seg = clkParaSegundos(m.clk);
+      if(seg===null) return '';
+      var hh = Math.floor(seg/3600), mm = Math.floor((seg%3600)/60), ss = Math.floor(seg%60);
+      return hh>0 ? hh+':'+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0') : mm+':'+String(ss).padStart(2,'0');
+    }
+  }
+  return '';
+}
+
+function renderStrips(game, ply){
+  var h = game.headers||{};
+  function html(cor){
+    var nome = cor==='w' ? (h.White||'Brancas') : (h.Black||'Pretas');
+    var elo = cor==='w' ? h.WhiteElo : h.BlackElo;
+    return '<span class="ps-dot ps-'+cor+'"></span><span class="ps-name">'+escapeHtml(nome)+'</span>'+
+      (elo && elo!=='?' ? '<span class="ps-elo">('+escapeHtml(elo)+')</span>' : '')+
+      (game.meuLado===cor ? '<span class="ps-me">você</span>' : '')+
+      '<span class="ps-clock">'+escapeHtml(relogioDe(game, ply, cor))+'</span>';
+  }
+  var topo = document.getElementById('stripTop'), base = document.getElementById('stripBottom');
+  if(topo) topo.innerHTML = html(state.boardFlipped ? 'w' : 'b');
+  if(base) base.innerHTML = html(state.boardFlipped ? 'b' : 'w');
 }
 
 export function renderLadoPicker(game){
@@ -202,6 +287,7 @@ export async function registrarErroDireto(game, ply){
 export function renderAnaliseMotorUI(game){
   var el = document.getElementById('analiseMotorWrap');
   if(!el) return;
+  atualizarRotulosAbas(game);
 
   var emAndamento = state.analiseEmAndamento && state.analiseEmAndamento.gameId===game.id;
   if(emAndamento){
@@ -378,6 +464,10 @@ export function stepTo(ply, skipRerenderMovelist){
     btn.classList.toggle('current', parseInt(btn.dataset.ply,10)===ply);
   });
 
+  renderStrips(game, ply);
+  if(viewerTab==='lances') centralizarLanceAtual();
+  atualizarRotulosAbas(game);
+
   if(painelGameId!==game.id || painelPly!==ply) renderQuickErroPanel(game);
 }
 
@@ -417,6 +507,7 @@ export function proximoPlyComErroPendente(game, plyAtual){
 export function renderQuickErroPanel(game){
   var panel = document.getElementById('quickErroPanel');
   if(!panel) return;
+  atualizarRotulosAbas(game);
   painelGameId = game.id;
   painelPly = state.currentPly;
   var ply = state.currentPly;

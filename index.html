@@ -352,25 +352,156 @@
 
   .loading-overlay{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;
     font-family:var(--font-mono);color:var(--ink-soft);z-index:1000;}
+
+  /* ================= UI v2: layout estilo Lichess / Chess.com ================= */
+  :root{
+    --topbar-h:52px;
+    --strip-h:30px;
+    /* UM tamanho de tabuleiro para o app todo: cabe na altura da janela, sem pular entre telas */
+    --board-size:max(300px, min(600px, calc(100vh - 260px), calc(100vw - 66px)));
+    --board-size-sm:min(360px, calc(100vw - 56px));
+  }
+  .app{max-width:1180px;padding-top:var(--sp-4);}
+
+  /* barra do topo fixa: a navegacao nunca sai da tela */
+  .topbar{position:sticky;top:0;z-index:100;background:var(--board-dark);color:var(--board-light);box-shadow:0 2px 10px rgba(0,0,0,.25);}
+  .topbar .rank-strip{height:3px;border-radius:0;}
+  .topbar-in{max-width:1180px;margin:0 auto;padding:0 var(--sp-4);height:var(--topbar-h);display:flex;align-items:center;gap:var(--sp-4);}
+  .brand{display:flex;align-items:center;gap:8px;font-family:var(--font-display);font-weight:800;font-size:18px;white-space:nowrap;}
+  .brand-mark{font-size:26px;line-height:1;color:var(--brass);}
+  .topbar nav.tabs{margin:0;flex:1;gap:2px;flex-wrap:nowrap;overflow-x:auto;scrollbar-width:none;}
+  .topbar nav.tabs::-webkit-scrollbar{display:none;}
+  .topbar nav.tabs{min-width:0;}
+  .brand,.topbar .stats-mini,.topbar .storage-status{flex:none;}
+  .topbar .tab-btn{background:transparent;border:none;border-radius:6px;color:rgba(234,226,206,.78);padding:8px 12px;font-size:14px;white-space:nowrap;}
+  .topbar .tab-btn:hover{background:rgba(255,255,255,.09);color:#fff;}
+  .topbar .tab-btn.active{background:rgba(255,255,255,.14);color:#fff;box-shadow:inset 0 -2px 0 var(--brass);}
+  .topbar .stats-mini{margin:0;color:rgba(234,226,206,.68);font-size:11.5px;white-space:nowrap;}
+  .topbar .storage-status.ok{margin:0;padding:0;font-size:0;color:#9CC9A4;white-space:nowrap;}
+  .topbar .storage-status.ok::before{content:'✓ salvo';font-size:11.5px;font-weight:600;}
+  .topbar .storage-status.bad{position:fixed;top:calc(var(--topbar-h) + 3px);left:0;right:0;margin:0;border-radius:0;text-align:center;z-index:99;}
+  @media (max-width:1100px){ .topbar .stats-mini{display:none;} }
+  @media (max-width:700px){ .brand-name{display:none;} .topbar-in{gap:var(--sp-2);} }
+
+  .card-compact{padding:12px 16px;margin-bottom:12px;}
+  .card-compact h2{font-size:18px;margin:0;}
+  label.checklist-item{text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;color:var(--ink);margin:0;}
+  label.btn{text-transform:none;letter-spacing:0;margin:0;display:inline-block;color:var(--ink-soft);}
+  .footer-nick{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);margin-top:8px;width:100%;}
+  .footer-nick input{width:140px;display:inline-block;margin:0 4px;padding:2px 6px;font-size:12px;}
+  footer{margin-top:var(--sp-5);}
+
+  /* Hoje em duas colunas */
+  .hoje-grid{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-4);align-items:start;}
+  .hoje-col{min-width:0;}
+  @media (max-width:900px){ .hoje-grid{grid-template-columns:1fr;gap:0;} }
+
+  /* filtros do caderno numa linha */
+  .filters-row{display:grid;grid-template-columns:2fr 1fr 1fr 2fr;gap:12px;}
+  .filters-row input,.filters-row select{margin-bottom:0;}
+  @media (max-width:800px){ .filters-row{grid-template-columns:1fr 1fr;} }
+
+  /* revisao: cabecalho enxuto */
+  .rev-head-row{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;}
+  .rev-stats{display:flex;gap:8px;flex-wrap:wrap;}
+  .chip{font-size:12.5px;color:var(--ink-soft);background:var(--paper);border:1px solid var(--line);border-radius:999px;padding:3px 12px;}
+  .chip b{font-family:var(--font-mono);color:var(--board-dark);font-size:14px;}
+  details.mini-details{border:none;background:transparent;margin:4px 0 0;overflow:visible;}
+  .mini-details summary{font-family:var(--font-body);font-weight:600;font-size:12.5px;padding:2px 0;color:var(--ink-soft);justify-content:flex-start;gap:8px;}
+  .mini-details summary:after{font-size:15px;}
+  .mini-details[open] summary{border-bottom:none;}
+  details.motor-config-details{border:none;background:transparent;margin:0;overflow:visible;}
+  .motor-config-details summary{padding:2px 0;font-family:var(--font-body);font-weight:600;font-size:12.5px;color:var(--ink-soft);justify-content:flex-start;gap:8px;}
+  .motor-config-details[open] summary{border-bottom:none;}
+  .motor-config-details .details-body{padding:6px 0 0;}
+  .motor-presets{margin:6px 0 2px;}
+  .import-details summary{padding:12px 16px;font-size:15.5px;}
+  .import-details .details-body{padding:12px 16px 14px;}
+  .import-details .lede{margin-bottom:10px;}
+
+  /* ---- coluna do tabuleiro + painel lateral (igual Lichess/Chess.com) ---- */
+  .game-layout{display:grid;grid-template-columns:var(--board-size) minmax(0,1fr);gap:var(--sp-4);align-items:stretch;}
+  .game-board-col{width:var(--board-size);min-width:0;}
+  .game-board-col .board-wrap,.game-board-col>.board-wrap .board{width:var(--board-size);}
+  /* o painel lateral tem sempre a altura do tabuleiro; o que passar disso rola DENTRO dele */
+  .game-side{position:relative;min-width:0;min-height:300px;}
+  .game-side-inner{position:absolute;inset:0;display:flex;flex-direction:column;border:1px solid var(--line);border-radius:var(--radius-sm);background:var(--card);overflow:hidden;}
+  .side-tabs{display:flex;flex:none;border-bottom:1px solid var(--line);background:var(--paper);}
+  .side-tab{flex:1;background:none;border:none;border-bottom:2px solid transparent;padding:10px 6px;font-family:var(--font-body);font-weight:600;font-size:13px;color:var(--ink-soft);cursor:pointer;white-space:nowrap;}
+  .side-tab:hover{color:var(--ink);}
+  .side-tab.active{color:var(--ink);border-bottom-color:var(--brass);background:var(--card);}
+  .side-pane{display:none;flex:1;min-height:0;overflow:auto;padding:12px 14px;}
+  .side-pane.active{display:block;}
+  .side-pane[data-pane="lances"]{padding:0;overflow:hidden;}
+  .game-side .movelist{position:relative;height:100%;max-height:none;border:none;border-radius:0;}
+  .game-side .quick-erro-panel{border-top:none;padding-top:0;}
+  .side-scroll{flex:1;min-height:0;overflow:auto;padding:12px 16px;}
+  .side-actions{flex:none;display:flex;gap:8px;justify-content:center;flex-wrap:wrap;padding:10px 14px;border-top:1px solid var(--line);background:var(--paper);}
+
+  .viewer-card{padding:12px 14px;}
+  .viewer-top{display:flex;align-items:center;gap:12px;margin-bottom:10px;flex-wrap:wrap;}
+  .viewer-top #ladoPickerWrap>*{margin:0 !important;}
+  .viewer-top input[type=text]{flex:1;min-width:200px;margin:0;}
+  .partida-viewer-slot{scroll-margin-top:calc(var(--topbar-h) + 8px);}
+
+  .player-strip{height:var(--strip-h);display:flex;align-items:center;gap:8px;font-size:13.5px;font-weight:600;min-width:0;}
+  .ps-dot{width:12px;height:12px;border-radius:3px;border:1px solid var(--ink-soft);flex:none;}
+  .ps-w{background:#fff;} .ps-b{background:#262626;}
+  .ps-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .ps-elo{font-weight:400;color:var(--ink-soft);font-family:var(--font-mono);font-size:12px;}
+  .ps-me{font-size:11px;font-weight:600;background:var(--brass);color:#fff;border-radius:999px;padding:0 7px;}
+  .ps-clock{margin-left:auto;font-family:var(--font-mono);font-weight:600;font-size:13px;background:var(--board-dark);color:var(--board-light);padding:2px 9px;border-radius:4px;min-width:58px;text-align:center;}
+  .ps-clock:empty{display:none;}
+  .game-board-col .board-controls{margin-top:8px;}
+  .game-board-col .move-status{margin-top:4px;}
+
+  /* revisao no mesmo esquema: tabuleiro fixo + painel; botoes de acao ficam colados no fundo do painel */
+  .rev-card{padding:12px;}
+  .rev-layout{grid-template-columns:calc(var(--board-size) + 32px) minmax(0,1fr);}
+  .rev-layout .game-board-col{width:calc(var(--board-size) + 32px);}
+  .board-row{width:calc(var(--board-size) + 32px);max-width:none;}
+  .vbar-ph{width:24px;flex:none;}
+  .rev-layout.sem-board{grid-template-columns:1fr;}
+  .sem-board .game-side{min-height:0;}
+  .sem-board .game-side-inner{position:static;}
+  .rev-layout .nav-ply{margin:8px 0 0;}
+  .rev-layout .linha-toggle{margin:4px 0 10px;flex-wrap:wrap;}
+  .rev-layout .multipv-list{margin-top:8px;}
+
+  /* mini tabuleiro do caderno de erros: tamanho fixo tambem */
+  .erro-mini-board{max-width:var(--board-size-sm);}
+  .erro-mini-board .board{width:var(--board-size-sm);max-width:none;margin:0 auto;}
+
+  /* telas estreitas: tabuleiro em cima, painel embaixo com altura limitada (rola por dentro) */
+  @media (max-width:960px){
+    .game-layout,.rev-layout{grid-template-columns:1fr;}
+    .game-board-col{margin:0 auto;}
+    .rev-layout .game-board-col{margin:0 auto;}
+    .game-side{min-height:0;height:min(60vh,440px);}
+    .sem-board .game-side{height:auto;}
+    /* sem espaco lateral sobrando: a barra de avaliacao sai e o tabuleiro ocupa a largura toda */
+    .vbar,.vbar-ph{display:none;}
+    .board-row{width:var(--board-size);}
+    .rev-layout .game-board-col{width:var(--board-size);}
+    .rev-card{padding:8px;}
+  }
+
+  .rev-tools,.card-compact .motor-config-slot{display:flex;flex-wrap:wrap;align-items:center;gap:4px 18px;}
+  .rev-tools .motor-config-slot{display:contents;}
+  .card-compact .motor-presets{margin:0;}
+  .card-compact .mini-details,.card-compact .motor-config-details{margin:0;}
+  .mini-details[open],.motor-config-details[open]{flex-basis:100%;order:5;}
+  .preset-status{font-size:11.5px;color:var(--ink-soft);}
 </style>
 </head>
 <body>
 
 <div id="loadingOverlay" class="loading-overlay">carregando caderno…</div>
 
-<div class="app">
-
-  <header class="app-header">
-    <div class="rank-strip" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
-    <h1>Caderno de Xadrez</h1>
-    <p class="subtitle">Caderno de erros · revisão espaçada · análise com Stockfish</p>
-    <p class="stats-mini" id="statsMini">carregando estatísticas…</p>
-    <p class="stats-mini" style="margin-top:-6px;">
-      Seu nick no Chess.com/Lichess: <input type="text" id="meuNickInput" value="" placeholder="seu nick" style="width:140px;display:inline-block;margin:0 0 0 4px;padding:2px 6px;font-size:12px;">
-      <span style="opacity:.7;">(usado pra saber de que lado você jogou, sozinho)</span>
-    </p>
-    <p class="storage-status" id="storageStatus" style="display:none;"></p>
-
+<header class="topbar">
+  <div class="rank-strip" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+  <div class="topbar-in">
+    <div class="brand"><span class="brand-mark" aria-hidden="true">♞</span><span class="brand-name">Caderno de Xadrez</span></div>
     <nav class="tabs" role="tablist">
       <button class="tab-btn active" data-tab="hoje" role="tab">Hoje</button>
       <button class="tab-btn" data-tab="plano" role="tab">Plano</button>
@@ -378,11 +509,17 @@
       <button class="tab-btn" data-tab="revisar" role="tab">Revisar</button>
       <button class="tab-btn" data-tab="partidas" role="tab">Partidas</button>
     </nav>
-  </header>
+    <p class="stats-mini" id="statsMini">carregando estatísticas…</p>
+    <p class="storage-status" id="storageStatus" style="display:none;"></p>
+  </div>
+</header>
+
+<div class="app">
 
   <main>
 
     <section id="tab-hoje" class="tab-panel active">
+    <div class="hoje-grid"><div class="hoje-col">
       <div class="today-focus">
         <div class="day-label" id="hojeDayLabel">—</div>
         <h2 id="hojeFocusTitle">—</h2>
@@ -395,6 +532,7 @@
         <div id="checklistWrap"></div>
       </div>
 
+      </div><div class="hoje-col">
       <div class="card" id="tacticsWidgetCard" style="display:none;">
         <h3>Tema tático de hoje</h3>
         <div id="tacticsWidgetBody"></div>
@@ -413,6 +551,7 @@
         <h3>Tendência de erros</h3>
         <div id="errorTrendWrap"></div>
       </div>
+    </div></div>
     </section>
 
     <section id="tab-plano" class="tab-panel">
@@ -622,70 +761,75 @@
         </details>
       </div>
 
-      <div class="card">
-        <div class="field-row">
-          <div>
-            <label for="erroFiltroTexto">Buscar</label>
-            <input type="text" id="erroFiltroTexto" placeholder="busca em lance, motivo ou padrão...">
-          </div>
-          <div>
-            <label for="erroFiltroTipo">Tipo</label>
+      <div class="card card-compact">
+        <div class="filters-row">
+          <div><label for="erroFiltroTexto">Buscar</label>
+            <input type="text" id="erroFiltroTexto" placeholder="lance, motivo ou padrão..."></div>
+          <div><label for="erroFiltroTipo">Tipo</label>
             <select id="erroFiltroTipo">
               <option value="">Todos</option>
               <option value="blunder">Blunder</option>
               <option value="mistake">Erro (Mistake)</option>
               <option value="inaccuracy">Imprecisão</option>
               <option value="miss">Miss</option>
-            </select>
-          </div>
+            </select></div>
+          <div><label for="erroFiltroPeriodo">Período</label>
+            <select id="erroFiltroPeriodo">
+              <option value="">Todos</option>
+              <option value="7">Últimos 7 dias</option>
+              <option value="30">Últimos 30 dias</option>
+            </select></div>
+          <div><label for="erroFiltroPartida">Partida</label>
+            <select id="erroFiltroPartida">
+              <option value="">Todas as partidas</option>
+            </select></div>
         </div>
-        <label for="erroFiltroPeriodo">Período</label>
-        <select id="erroFiltroPeriodo">
-          <option value="">Todos</option>
-          <option value="7">Últimos 7 dias</option>
-          <option value="30">Últimos 30 dias</option>
-        </select>
-        <label for="erroFiltroPartida">Partida</label>
-        <select id="erroFiltroPartida">
-          <option value="">Todas as partidas</option>
-        </select>
       </div>
 
       <div id="errosListWrap"></div>
     </section>
 
     <section id="tab-revisar" class="tab-panel">
-      <div class="card">
-        <h2>Revisão espaçada</h2>
-        <p class="lede">Resolva de novo as posições exatas onde você já errou. Com tabuleiro, o motor confirma se o seu lance está bom; sem tabuleiro, você se auto-avalia. Acerte <strong>3 vezes seguidas</strong> pra tirar um erro da fila — se errar de novo, ele volta com o contador zerado.</p>
-        <div class="stat-grid">
-          <div class="stat-box"><div class="num" id="revPendentes">0</div><div class="lab">Pendentes</div></div>
-          <div class="stat-box"><div class="num" id="revDominados">0</div><div class="lab">Dominados</div></div>
-          <div class="stat-box"><div class="num" id="revHoje">0</div><div class="lab">Revisado hoje</div></div>
+      <div class="card card-compact">
+        <div class="rev-head-row">
+          <h2>Revisão espaçada</h2>
+          <div class="rev-stats">
+            <span class="chip"><b id="revPendentes">0</b> pendentes</span>
+            <span class="chip"><b id="revDominados">0</b> dominados</span>
+            <span class="chip"><b id="revHoje">0</b> hoje</span>
+          </div>
         </div>
+        <div class="rev-tools">
+        <details class="mini-details">
+          <summary>Como funciona</summary>
+          <p class="lede" style="margin:6px 0 0;">Resolva de novo as posições exatas onde você já errou. Com tabuleiro, o motor confirma se o seu lance está bom; sem tabuleiro, você se auto-avalia. Acerte <strong>3 vezes seguidas</strong> pra tirar um erro da fila — se errar de novo, ele volta com o contador zerado.</p>
+        </details>
         <div class="motor-config-slot"></div>
+        </div>
       </div>
       <div id="revisarWrap"></div>
     </section>
 
     <section id="tab-partidas" class="tab-panel">
-      <div class="card">
-        <h2>Partidas</h2>
-        <p class="lede">Cole o PGN de uma partida do Chess.com (ou arraste o arquivo .pgn pra cá) pra reviver e marcar erros direto no tabuleiro. Colar já importa sozinho.</p>
-        <div class="import-drop" id="importDropZone">
-          <textarea id="pgnPaste" placeholder="Cole aqui o PGN da partida (ou de várias, coladas em sequência)... colar já importa automático" style="min-height:110px;"></textarea>
-          <div class="btn-row">
-            <button class="btn btn-primary" id="importBtn">Importar partida(s)</button>
-            <label class="btn btn-ghost" style="cursor:pointer;">
-              Enviar arquivo .pgn
-              <input type="file" id="pgnFile" accept=".pgn,.txt" style="display:none;">
-            </label>
+      <details id="importDetails" class="import-details" open>
+        <summary>Importar partidas (PGN)</summary>
+        <div class="details-body">
+          <p class="lede">Cole o PGN de uma partida do Chess.com ou Lichess (ou arraste o arquivo .pgn pra cá) pra reviver e marcar erros direto no tabuleiro. Colar já importa sozinho.</p>
+          <div class="import-drop" id="importDropZone">
+            <textarea id="pgnPaste" placeholder="Cole aqui o PGN da partida (ou de várias, coladas em sequência)... colar já importa automático" style="min-height:90px;"></textarea>
+            <div class="btn-row">
+              <button class="btn btn-primary" id="importBtn">Importar partida(s)</button>
+              <label class="btn btn-ghost" style="cursor:pointer;">
+                Enviar arquivo .pgn
+                <input type="file" id="pgnFile" accept=".pgn,.txt" style="display:none;">
+              </label>
+            </div>
+            <p class="import-error" id="importError"></p>
           </div>
-          <p class="import-error" id="importError"></p>
         </div>
-      </div>
+      </details>
 
-      <div class="card"><div class="motor-config-slot"></div></div>
+      <div class="card card-compact"><div class="motor-config-slot"></div></div>
 
       <div id="partidasListWrap"></div>
     </section>
@@ -693,7 +837,8 @@
   </main>
 
   <footer>
-    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 9</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
+    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 10</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
+    <div class="footer-nick">Seu nick no Chess.com/Lichess: <input type="text" id="meuNickInput" value="" placeholder="seu nick"> <span>(usado pra saber de que lado você jogou, sozinho)</span></div>
     <div class="save-bar" style="margin:8px 0 0;font-size:12px;">
       <span class="save-bar-group-label">Backup:</span>
       <button class="btn btn-ghost btn-sm" id="saveFileBtn">Baixar</button>

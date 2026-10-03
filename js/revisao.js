@@ -239,45 +239,43 @@ export function renderRevisarSimples(wrap, en, game, temTabuleiro, totalPendente
     var cursor = Math.max(0, Math.min(ri.cursorPly, maxCursor));
     ri.cursorPly = cursor;
     var lastMoveNav = cursor>0 ? game.applied[cursor-1] : null;
-    boardHtml = '<div class="board-wrap" style="max-width:420px;margin:0 auto;"><div class="board">'+boardSquaresHTML(game.fens[cursor], lastMoveNav, flipped)+'</div></div>';
+    boardHtml = blocoTabuleiro('', boardSquaresHTML(game.fens[cursor], lastMoveNav, flipped), null, null, flipped);
     navHtml = navPlyHTML(cursor, maxCursor);
   }
 
   var avisoMotor = (temTabuleiro && engineState==='falhou') ? '<p class="motor-status">Não consegui carregar o motor de xadrez (confira os arquivos em engine/) — revisão no modo simples.</p>' : '';
 
-  var corpo, hintPares;
+  var sideHtml, acoesHtml, hintPares;
+  var colHtml = temTabuleiro ? boardHtml+navHtml : '';
   if(!revelado){
-    corpo =
+    sideHtml =
       '<div class="erro-top"><span class="erro-date">'+escapeHtml(formatPtDate(en.data))+'</span><span class="badge badge-'+en.tipo+'">'+tipoLabel(en.tipo)+'</span></div>'+
       progressoHtml+avisoMotor+
       (temTabuleiro
-        ? '<p class="lede" style="margin-bottom:10px;">É a vez '+(flipped?'das pretas':'das brancas')+'. O que você jogaria aqui — antes de olhar o que rolou de verdade?</p>'+boardHtml+navHtml
+        ? '<p class="lede" style="margin-bottom:10px;">É a vez '+(flipped?'das pretas':'das brancas')+'. O que você jogaria aqui — antes de olhar o que rolou de verdade?</p>'
         : '<p class="lede" style="margin-bottom:10px;">Lembra por que esse lance foi um erro, e o que você faria diferente hoje?</p>'+
-          (en.lance ? '<div class="erro-move">'+escapeHtml(en.lance)+'</div>' : ''))+
-      '<div class="btn-row" style="margin-top:14px;justify-content:center;">'+
-        '<button class="btn btn-primary btn-sm" id="revRevelarBtn">Revelar</button>'+
-        (totalPendentes>1 ? '<button class="btn btn-ghost btn-sm" id="revPularBtn">Pular por agora</button>' : '')+
-      '</div>';
+          (en.lance ? '<div class="erro-move">'+escapeHtml(en.lance)+'</div>' : ''));
+    acoesHtml =
+      '<button class="btn btn-primary btn-sm" id="revRevelarBtn">Revelar</button>'+
+      (totalPendentes>1 ? '<button class="btn btn-ghost btn-sm" id="revPularBtn">Pular por agora</button>' : '');
     hintPares = temTabuleiro ? [['espaço/enter','revelar'],['←→','navegar'],['p','pular']] : [['espaço/enter','revelar']];
   } else {
-    corpo =
+    sideHtml =
       '<div class="erro-top"><span class="erro-date">'+escapeHtml(formatPtDate(en.data))+(en.ritmo?' · '+escapeHtml(en.ritmo):'')+(en.resultado?' · '+escapeHtml(en.resultado):'')+'</span><span class="badge badge-'+en.tipo+'">'+tipoLabel(en.tipo)+'</span></div>'+
       progressoHtml+
-      boardHtml+navHtml+
-      (en.lance ? '<div class="erro-move" style="margin-top:10px;">O que rolou de verdade: '+escapeHtml(en.lance)+'</div>' : '')+
+      (en.lance ? '<div class="erro-move">O que rolou de verdade: '+escapeHtml(en.lance)+'</div>' : '')+
       (en.contexto ? '<div style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:6px;">'+escapeHtml(en.contexto)+'</div>' : '')+
       (en.motivo ? '<div class="erro-field-label">O que eu devia ter pensado</div><div class="erro-field-val">'+escapeHtml(en.motivo)+'</div>' : '')+
       (en.padrao ? '<div class="erro-field-label">Padrão recorrente</div><div class="erro-field-val">'+escapeHtml(en.padrao)+'</div>' : '')+
-      '<p class="lede" style="margin-top:14px;margin-bottom:6px;">Se essa posição caísse numa partida sua hoje, você evitaria esse erro?</p>'+
-      '<div class="btn-row" style="justify-content:center;">'+
-        '<button class="btn btn-danger btn-sm" id="revErreiBtn">Ainda erraria</button>'+
-        '<button class="btn btn-primary btn-sm" id="revAcerteiBtn">Já evito esse erro</button>'+
-      '</div>';
+      '<p class="lede" style="margin-top:14px;margin-bottom:0;">Se essa posição caísse numa partida sua hoje, você evitaria esse erro?</p>';
+    acoesHtml =
+      '<button class="btn btn-danger btn-sm" id="revErreiBtn">Ainda erraria</button>'+
+      '<button class="btn btn-primary btn-sm" id="revAcerteiBtn">Já evito esse erro</button>';
     hintPares = temTabuleiro ? [['1','ainda erraria'],['2','já evito'],['←→','navegar']] : [['1','ainda erraria'],['2','já evito']];
   }
 
   var animarS = ri.animarProximaRenderizacao; ri.animarProximaRenderizacao = false;
-  wrap.innerHTML = '<div class="erro-card tipo-'+en.tipo+(animarS?' revisar-anim':'')+'">'+corpo+'</div>'+
+  wrap.innerHTML = '<div class="erro-card rev-card tipo-'+en.tipo+(animarS?' revisar-anim':'')+'">'+layoutRevisaoHTML(colHtml, sideHtml, acoesHtml)+'</div>'+
     atalhosHintHTML(hintPares)+
     '<p style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:8px;">'+filaResumoTexto(totalPendentes)+(en.vezesRevisado?' · já revisado '+en.vezesRevisado+'x antes':'')+'</p>';
 
@@ -330,9 +328,22 @@ function barraAvaliacaoHTML(b){
 }
 
 function blocoTabuleiro(classeExtra, squaresHtml, setas, barra, flipped){
-  return '<div class="board-row" style="max-width:'+(barra?456:420)+'px;">'+
-    (barra ? barraAvaliacaoHTML(barra) : '')+
+  /* a barra de avaliacao aparece so depois da tentativa; o espaco dela e sempre reservado
+     pra o tabuleiro nao mudar de tamanho nem de lugar */
+  return '<div class="board-row">'+
+    (barra ? barraAvaliacaoHTML(barra) : '<div class="vbar-ph"></div>')+
     '<div class="board-wrap"><div class="board'+classeExtra+'">'+squaresHtml+'</div>'+setasSVG(setas, flipped)+'</div>'+
+  '</div>';
+}
+
+/* Estrutura comum: [tabuleiro | painel com rolagem interna + botoes de acao fixos no fundo] */
+function layoutRevisaoHTML(colHtml, sideHtml, acoesHtml){
+  return '<div class="game-layout rev-layout'+(colHtml?'':' sem-board')+'">'+
+    (colHtml ? '<div class="game-board-col">'+colHtml+'</div>' : '')+
+    '<div class="game-side"><div class="game-side-inner">'+
+      '<div class="side-scroll">'+sideHtml+'</div>'+
+      (acoesHtml ? '<div class="side-actions">'+acoesHtml+'</div>' : '')+
+    '</div></div>'+
   '</div>';
 }
 
@@ -555,44 +566,43 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
     }).join('')+'</div>';
   }
 
-  var corpo = '<div class="erro-top"><span class="erro-date">'+escapeHtml(formatPtDate(en.data))+'</span><span class="badge badge-'+en.tipo+'">'+tipoLabel(en.tipo)+'</span></div>'+progressoHtml;
-  var hintPares;
+  var cabecalho = '<div class="erro-top"><span class="erro-date">'+escapeHtml(formatPtDate(en.data))+'</span><span class="badge badge-'+en.tipo+'">'+tipoLabel(en.tipo)+'</span></div>'+progressoHtml;
+  var colHtml = boardHtml+navHtml, sideHtml, acoesHtml = '', hintPares;
 
   if(!ri.resultado){
-    corpo += '<p class="lede" style="margin-bottom:6px;">'+(interativo ? ('É a vez '+(flipped?'das pretas':'das brancas')+'. Jogue no tabuleiro o lance que você acha certo.') : 'Olhando um lance anterior — navegue pra voltar à posição do puzzle.')+'</p>'+
-      statusHtml+boardHtml+navHtml+promoHtml;
-    var botoesExtra = [];
-    if(totalPendentes>1 && !ri.avaliando) botoesExtra.push('<button class="btn btn-ghost btn-sm" id="revPularBtn">Pular por agora</button>');
-    if(botoesExtra.length) corpo += '<div class="btn-row" style="margin-top:10px;justify-content:center;">'+botoesExtra.join('')+'</div>';
+    colHtml += promoHtml;
+    sideHtml = cabecalho+
+      '<p class="lede" style="margin-bottom:6px;">'+(interativo ? ('É a vez '+(flipped?'das pretas':'das brancas')+'. Jogue no tabuleiro o lance que você acha certo.') : 'Olhando um lance anterior — navegue pra voltar à posição do puzzle.')+'</p>'+
+      statusHtml;
+    if(totalPendentes>1 && !ri.avaliando) acoesHtml = '<button class="btn btn-ghost btn-sm" id="revPularBtn">Pular por agora</button>';
     hintPares = [['←→','navegar'],['p','pular']];
     if(ri.promocaoPendente) hintPares.unshift(['1-4','escolher peça']);
     if(ri.selecionada) hintPares.push(['esc','cancelar seleção']);
   } else {
     var r = ri.resultado;
     var bannerClasse = (r.classe==='otima'||r.classe==='boa'||r.classe==='brilhante'||r.classe==='great') ? 'certo' : (r.classe==='imprecisao' ? 'mediano' : 'errado');
-    corpo += '<div class="feedback-banner '+bannerClasse+'">'+escapeHtml(r.texto)+'</div>'+
+    sideHtml = cabecalho+
+      '<div class="feedback-banner '+bannerClasse+'">'+escapeHtml(r.texto)+'</div>'+
       '<div class="eval-bar-label">Você jogou '+escapeHtml(r.sanUsuario)+' (avaliação '+escapeHtml(r.avalTexto)+')'+(r.perda>20 && r.bestSan ? ' · motor preferia '+escapeHtml(r.bestSan) : '')+'</div>'+
       '<div class="linha-toggle">'+
-        '<button type="button" class="btn btn-ghost'+(ri.timeline==='sua'?' ativa':'')+'" id="revVerSua">Sua tentativa</button>'+
-        '<button type="button" class="btn btn-ghost'+(ri.timeline==='jogo'?' ativa':'')+'" id="revVerReal">Partida real</button>'+
-        '<button type="button" class="btn btn-ghost'+(ri.timeline==='motor'?' ativa':'')+'" id="revVerMotor">Sugestão do motor</button>'+
+        '<button type="button" class="btn btn-ghost btn-sm'+(ri.timeline==='sua'?' ativa':'')+'" id="revVerSua">Sua tentativa</button>'+
+        '<button type="button" class="btn btn-ghost btn-sm'+(ri.timeline==='jogo'?' ativa':'')+'" id="revVerReal">Partida real</button>'+
+        '<button type="button" class="btn btn-ghost btn-sm'+(ri.timeline==='motor'?' ativa':'')+'" id="revVerMotor">Sugestão do motor</button>'+
       '</div>'+
-      boardHtml+navHtml+
-      (legendaSetas ? '<div class="eval-bar-label">'+escapeHtml(legendaSetas)+'</div>' : '')+
+      (legendaSetas ? '<div class="eval-bar-label" style="margin-bottom:6px;">'+escapeHtml(legendaSetas)+'</div>' : '')+
       renderLinhasMotorHTML(fenAntes, ri.refLinhas)+
       (en.contexto ? '<div style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:6px;">'+escapeHtml(en.contexto)+'</div>' : '')+
       (en.motivo ? '<div class="erro-field-label">O que eu devia ter pensado</div><div class="erro-field-val">'+escapeHtml(en.motivo)+'</div>' : '')+
-      (en.padrao ? '<div class="erro-field-label">Padrão recorrente</div><div class="erro-field-val">'+escapeHtml(en.padrao)+'</div>' : '')+
-      '<div class="btn-row" style="margin-top:14px;justify-content:center;">'+
-        '<button class="btn btn-ghost btn-sm" id="revTentarDeNovoBtn">Tentar de novo</button>'+
-        '<button class="btn btn-primary btn-sm" id="revProximaBtn">Próxima</button>'+
-      '</div>';
+      (en.padrao ? '<div class="erro-field-label">Padrão recorrente</div><div class="erro-field-val">'+escapeHtml(en.padrao)+'</div>' : '');
+    acoesHtml =
+      '<button class="btn btn-ghost btn-sm" id="revTentarDeNovoBtn">Tentar de novo</button>'+
+      '<button class="btn btn-primary btn-sm" id="revProximaBtn">Próxima</button>';
     hintPares = [['←→','navegar'],['n','próxima'],['r','tentar de novo']];
   }
 
   var infoMotorRodape = ri.refInfo && ri.refInfo.depth ? (' · Stockfish, profundidade '+ri.refInfo.depth) : ' · Stockfish';
   var animarM = ri.animarProximaRenderizacao; ri.animarProximaRenderizacao = false;
-  wrap.innerHTML = '<div class="erro-card tipo-'+en.tipo+(animarM?' revisar-anim':'')+'">'+corpo+'</div>'+
+  wrap.innerHTML = '<div class="erro-card rev-card tipo-'+en.tipo+(animarM?' revisar-anim':'')+'">'+layoutRevisaoHTML(colHtml, sideHtml, acoesHtml)+'</div>'+
     atalhosHintHTML(hintPares)+
     '<p style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:8px;">'+filaResumoTexto(totalPendentes)+(en.vezesRevisado?' · já revisado '+en.vezesRevisado+'x antes':'')+infoMotorRodape+'</p>';
 

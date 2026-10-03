@@ -89,7 +89,9 @@ function montarConfigMotor(){
 }
 
 export function switchTab(name){
+  var mudou = state.activeTab!==name;
   state.activeTab = name;
+  if(mudou) window.scrollTo(0, 0); /* cada aba abre no topo, nao na rolagem da aba anterior */
   document.querySelectorAll('.tab-btn').forEach(function(btn){
     btn.classList.toggle('active', btn.dataset.tab===name);
   });
