@@ -146,6 +146,52 @@ export function renderLadoPicker(game){
   }
 }
 
+/* Registra direto, sem abrir o formulario, o erro apontado pela analise do motor nesse lance.
+   Preenche tudo o que da pra deduzir (data, ritmo, resultado, tipo, contexto); o motivo e o padrao
+   ficam vazios e podem ser preenchidos depois (Editar, aqui ou na aba Caderno de Erros). */
+export async function registrarErroDireto(game, ply){
+  var mv = game.applied[ply-1];
+  if(!mv) return false;
+  var jaExiste = state.erros.some(function(e){ return e.gameId===game.id && e.ply===ply; });
+  if(jaExiste){ showToast('Esse lance já está registrado.'); return false; }
+
+  var info = game.analiseMotor && game.analiseMotor.porPly[ply];
+  var tipo = (info && mapClasseParaTipo(info.classe)) || 'inaccuracy';
+  var h = game.headers||{};
+  var dataVal = todayStr();
+  if(h.Date && /^\d{4}\.\d{2}\.\d{2}$/.test(h.Date)){ dataVal = h.Date.replace(/\./g,'-'); }
+  var moveNum = Math.floor((ply-1)/2)+1;
+  var label = (mv.color==='w' ? moveNum+'.' : moveNum+'...')+' '+mv.san;
+
+  state.erros.unshift({
+    id: 'e'+Date.now(),
+    data: dataVal,
+    ritmo: formatTimeControl(h.TimeControl),
+    resultado: deriveResultado(game.meuLado, h.Result) || 'Derrota',
+    tipo: tipo,
+    lance: label,
+    motivo: '',
+    padrao: '',
+    contexto: (h.White||'Brancas')+' vs '+(h.Black||'Pretas')+' · '+(h.TimeControl||'')+' · FEN: '+game.fens[ply],
+    gameId: game.id,
+    ply: ply,
+    criadoEm: Date.now(),
+    acertosSeguidos: 0,
+    resolvido: false,
+    vezesRevisado: 0,
+    ultimaRevisaoEm: null
+  });
+  await persist();
+  showToast('Erro registrado: '+label+'.');
+  renderErros();
+  renderHeaderStats();
+  renderHoje();
+  renderMovelist(game);
+  renderAnaliseMotorUI(game);
+  renderQuickErroPanel(game);
+  return true;
+}
+
 export function renderAnaliseMotorUI(game){
   var el = document.getElementById('analiseMotorWrap');
   if(!el) return;
@@ -227,7 +273,9 @@ export function renderAnaliseMotorUI(game){
     return '<div class="analise-item">'+
       '<span class="badge badge-'+tipo+'">'+tipoLabel(tipo)+'</span>'+
       '<span>'+label+' (perdeu ~'+it.info.perda+'cp)'+pressao+'</span>'+
-      (jaLogados[it.ply] ? '<span class="flag" title="já registrado">● registrado</span>' : '<button class="btn btn-ghost btn-sm" data-ver-ply="'+it.ply+'">Ver e registrar</button>')+
+      (jaLogados[it.ply]
+        ? '<span class="flag" title="já registrado">● registrado</span><button class="btn btn-ghost btn-sm" data-ver-ply="'+it.ply+'">Ver</button>'
+        : '<button class="btn btn-ghost btn-sm" data-ver-ply="'+it.ply+'">Ver</button><button class="btn btn-primary btn-sm" data-registrar-ply="'+it.ply+'" title="Registra direto no caderno, sem abrir o formulário">Registrar</button>')+
     '</div>';
   }).join('') : '<p class="ci-sub">Nenhum problema encontrado'+(meuLado?' nos seus lances':'')+' — mandou bem nessa!</p>';
 
@@ -236,6 +284,12 @@ export function renderAnaliseMotorUI(game){
 
   el.querySelectorAll('[data-ver-ply]').forEach(function(btn){
     btn.addEventListener('click', function(){ stepTo(parseInt(btn.dataset.verPly,10)); });
+  });
+  el.querySelectorAll('[data-registrar-ply]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      btn.disabled = true;
+      registrarErroDireto(game, parseInt(btn.dataset.registrarPly,10));
+    });
   });
   var btnDeNovo = document.getElementById('analisarBtn');
   if(btnDeNovo) btnDeNovo.addEventListener('click', function(){ iniciarAnaliseCompleta(game); });
