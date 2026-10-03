@@ -27,3 +27,20 @@ export var state = {
 export function getTodayChecklist(){
   return state.checklistByDate[todayStr()] || { b1:false, b2:false, b3:false, b4:false };
 }
+
+/* Presets de configuracao do motor (aplicam as 4 opcoes de uma vez). */
+export var MOTOR_PRESETS = {
+  rapido:      { rotulo:'⚡ Rápido',      multiPv:1, movetimeMs:500,  hashMb:16, depthAnalise:12 },
+  equilibrado: { rotulo:'⚖ Equilibrado', multiPv:2, movetimeMs:1200, hashMb:32, depthAnalise:16 },
+  profundo:    { rotulo:'🔬 Profundo',    multiPv:3, movetimeMs:3000, hashMb:64, depthAnalise:22 }
+};
+
+export function presetAtual(){
+  var c = state.motorConfig;
+  var achado = null;
+  Object.keys(MOTOR_PRESETS).forEach(function(k){
+    var p = MOTOR_PRESETS[k];
+    if(p.multiPv===c.multiPv && p.movetimeMs===c.movetimeMs && p.hashMb===c.hashMb && p.depthAnalise===c.depthAnalise) achado = k;
+  });
+  return achado;
+}

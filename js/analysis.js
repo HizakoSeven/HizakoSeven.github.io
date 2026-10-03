@@ -62,7 +62,8 @@ export function derivarClassificacoesPorPly(todasLinhas, applied, porPlyExistent
   return porPly;
 }
 
-export async function iniciarAnaliseCompleta(game){
+export async function iniciarAnaliseCompleta(game, opcoes){
+  opcoes = opcoes || {};
   if(state.analiseEmAndamento && !state.analiseEmAndamento.cancelado) return;
   var total = game.fens.length;
   state.analiseEmAndamento = { gameId: game.id, atual: 0, total: total, cancelado: false };
@@ -89,7 +90,7 @@ export async function iniciarAnaliseCompleta(game){
   engineWorker.postMessage('ucinewgame'); /* zera o hash: cada analise completa parte do mesmo estado */
 
   var todasLinhas = new Array(total);
-  var depthAnalise = state.motorConfig.depthAnalise || 20;
+  var depthAnalise = opcoes.depth || state.motorConfig.depthAnalise || 20;
   var multiPvAnalise = Math.max(2, state.motorConfig.multiPv || 1); /* Great precisa comparar a 1a com a 2a linha */
 
   function avaliarIndice(idx){

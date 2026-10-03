@@ -288,6 +288,9 @@
   .atalhos-hint kbd{background:var(--card);border:1px solid var(--line);border-radius:3px;padding:0 4px;font-family:var(--font-mono);}
 
   .motor-config-details summary{font-size:12.5px;}
+  .motor-presets{display:flex;align-items:center;flex-wrap:wrap;gap:8px;margin:4px 0 8px;}
+  .cfg-label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);display:block;margin-bottom:3px;}
+  .motor-config-grid select{width:100%;}
   .analise-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;flex-wrap:wrap;}
   .analise-item:last-child{border-bottom:none;}
   .analise-lista{margin-top:6px;}
@@ -663,55 +666,7 @@
           <div class="stat-box"><div class="num" id="revDominados">0</div><div class="lab">Dominados</div></div>
           <div class="stat-box"><div class="num" id="revHoje">0</div><div class="lab">Revisado hoje</div></div>
         </div>
-        <details class="motor-config-details">
-          <summary>Config do motor (Stockfish)</summary>
-          <div class="details-body">
-            <div class="motor-config-grid">
-              <div>
-                <label for="cfgMultiPv">Linhas mostradas</label>
-                <select id="cfgMultiPv">
-                  <option value="1">1</option>
-                  <option value="2">2</option>
-                  <option value="3">3</option>
-                  <option value="4">4</option>
-                  <option value="5">5</option>
-                </select>
-              </div>
-              <div>
-                <label for="cfgMovetime">Tempo de busca</label>
-                <select id="cfgMovetime">
-                  <option value="500">0.5s</option>
-                  <option value="1000">1s</option>
-                  <option value="1200">1.2s</option>
-                  <option value="2000">2s</option>
-                  <option value="3000">3s</option>
-                  <option value="5000">5s</option>
-                </select>
-              </div>
-              <div>
-                <label for="cfgHash">Memória (hash)</label>
-                <select id="cfgHash">
-                  <option value="16">16 MB</option>
-                  <option value="32">32 MB</option>
-                  <option value="64">64 MB</option>
-                  <option value="128">128 MB</option>
-                </select>
-              </div>
-              <div>
-                <label for="cfgDepthAnalise">Profundidade (análise de partida)</label>
-                <select id="cfgDepthAnalise">
-                  <option value="14">14</option>
-                  <option value="16">16</option>
-                  <option value="18">18</option>
-                  <option value="20" selected>20</option>
-                  <option value="22">22</option>
-                  <option value="25">25</option>
-                </select>
-              </div>
-            </div>
-            <p class="ci-sub" style="margin-top:8px;">Mais linhas e mais tempo deixam a análise mais completa, mas demoram mais por posição. As linhas extras só aparecem depois que você já jogou o seu lance — não tem spoiler antes disso. A análise de partida inteira usa profundidade fixa (não tempo) de propósito: dá o mesmo resultado sempre que você reanalisar a mesma partida — profundidade maior demora mais, principalmente em posições complicadas.</p>
-          </div>
-        </details>
+        <div class="motor-config-slot"></div>
       </div>
       <div id="revisarWrap"></div>
     </section>
@@ -732,6 +687,8 @@
           <p class="import-error" id="importError"></p>
         </div>
       </div>
+
+      <div class="card"><div class="motor-config-slot"></div></div>
 
       <div id="partidasListWrap"></div>
     </section>

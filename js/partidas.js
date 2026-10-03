@@ -4,7 +4,7 @@ import { boardSquaresHTML } from './board.js';
 import { persist } from './persistence.js';
 import { collectErroEditValues, erroEditFieldsHTML, renderErros, tipoLabel } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
-import { state } from './state.js';
+import { MOTOR_PRESETS, state } from './state.js';
 import { renderPainelTempo } from './tempo.js';
 import { escapeHtml, formatPtDate, showToast, todayStr } from './utils.js';
 
@@ -164,10 +164,13 @@ export function renderAnaliseMotorUI(game){
   }
 
   if(!game.analiseMotor){
-    el.innerHTML = '<button class="btn btn-primary btn-sm" id="analisarBtn">Analisar partida com o motor</button>'+
+    el.innerHTML = '<div class="btn-row"><button class="btn btn-primary btn-sm" id="analisarBtn">Analisar partida com o motor</button>'+
+      '<button class="btn btn-ghost btn-sm" id="analisarRapidoBtn" title="Profundidade 12 — bem mais rápido, um pouco menos preciso">⚡ Análise rápida</button></div>'+
       '<p class="ci-sub" style="margin-top:6px;">Avalia toda posição da partida e marca imprecisões, erros e blunders — nos seus lances por padrão.</p>';
     var btn = document.getElementById('analisarBtn');
     if(btn) btn.addEventListener('click', function(){ iniciarAnaliseCompleta(game); });
+    var btnRapido = document.getElementById('analisarRapidoBtn');
+    if(btnRapido) btnRapido.addEventListener('click', function(){ iniciarAnaliseCompleta(game, { depth: MOTOR_PRESETS.rapido.depthAnalise }); });
     return;
   }
 
@@ -197,7 +200,7 @@ export function renderAnaliseMotorUI(game){
   if(nGreat) textoDestaque.push(nGreat+' ótimo'+(nGreat===1?'':'s'));
 
   var resumo = '<p class="lede" style="margin-bottom:8px;">'+
-    (game.analiseMotor.completo?'Análise completa':'Análise parcial (foi cancelada no meio)')+
+    (game.analiseMotor.completo?'Análise completa':'Análise parcial (foi cancelada no meio)')+(game.analiseMotor.depthUsado?' (profundidade '+game.analiseMotor.depthUsado+')':'')+
     ' · '+contagem.blunder+' blunder'+(contagem.blunder===1?'':'s')+', '+contagem.erro+' erro'+(contagem.erro===1?'':'s')+', '+contagem.imprecisao+' imprecis'+(contagem.imprecisao===1?'ão':'ões')+', '+contagem.miss+' miss'+
     (meuLado ? ' nos seus lances' : '')+'.</p>'+
     (destaques.length ? '<div class="feedback-banner certo">🌟 '+textoDestaque.join(' e ')+' — bons momentos nessa partida!</div>' : '');
@@ -229,13 +232,15 @@ export function renderAnaliseMotorUI(game){
   }).join('') : '<p class="ci-sub">Nenhum problema encontrado'+(meuLado?' nos seus lances':'')+' — mandou bem nessa!</p>';
 
   el.innerHTML = resumo+brilhantesHtml+'<div class="analise-lista">'+listaHtml+'</div>'+
-    '<div class="btn-row" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" id="analisarBtn">Analisar de novo</button></div>';
+    '<div class="btn-row" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" id="analisarBtn">Analisar de novo</button><button class="btn btn-ghost btn-sm" id="analisarRapidoBtn" title="Profundidade 12 — mais rápido, um pouco menos preciso">⚡ Analisar de novo (rápido)</button></div>';
 
   el.querySelectorAll('[data-ver-ply]').forEach(function(btn){
     btn.addEventListener('click', function(){ stepTo(parseInt(btn.dataset.verPly,10)); });
   });
   var btnDeNovo = document.getElementById('analisarBtn');
   if(btnDeNovo) btnDeNovo.addEventListener('click', function(){ iniciarAnaliseCompleta(game); });
+  var btnDeNovoRapido = document.getElementById('analisarRapidoBtn');
+  if(btnDeNovoRapido) btnDeNovoRapido.addEventListener('click', function(){ iniciarAnaliseCompleta(game, { depth: MOTOR_PRESETS.rapido.depthAnalise }); });
 }
 
 export function moveTimeLabel(mv){

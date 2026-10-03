@@ -5,18 +5,24 @@ import { avaliarFEN, engineState } from './engine.js';
 import { persist } from './persistence.js';
 import { renderErros, tipoLabel } from './render-erros.js';
 import { renderHeaderStats } from './render-hoje.js';
-import { state } from './state.js';
+import { presetAtual, state } from './state.js';
 import { escapeHtml, formatPtDate, showToast, todayStr, wrapArray } from './utils.js';
 
 export function sincronizarControlesMotor(){
-  var elMulti = document.getElementById('cfgMultiPv');
-  var elMove = document.getElementById('cfgMovetime');
-  var elHash = document.getElementById('cfgHash');
-  var elDepthAnalise = document.getElementById('cfgDepthAnalise');
-  if(elMulti) elMulti.value = String(state.motorConfig.multiPv);
-  if(elMove) elMove.value = String(state.motorConfig.movetimeMs);
-  if(elHash) elHash.value = String(state.motorConfig.hashMb);
-  if(elDepthAnalise) elDepthAnalise.value = String(state.motorConfig.depthAnalise);
+  var mapa = { multiPv:'multiPv', movetimeMs:'movetimeMs', hashMb:'hashMb', depthAnalise:'depthAnalise' };
+  wrapArray(document.querySelectorAll('[data-cfg]')).forEach(function(sel){
+    var valor = state.motorConfig[mapa[sel.dataset.cfg]];
+    if(valor!==undefined && valor!==null) sel.value = String(valor);
+  });
+  var ativo = presetAtual();
+  wrapArray(document.querySelectorAll('[data-preset]')).forEach(function(btn){
+    var on = btn.dataset.preset===ativo;
+    btn.classList.toggle('btn-primary', on);
+    btn.classList.toggle('btn-ghost', !on);
+  });
+  wrapArray(document.querySelectorAll('.preset-status')).forEach(function(el){
+    el.textContent = ativo ? '' : 'personalizado';
+  });
 }
 
 export function aoTeclaRevisao(e){
