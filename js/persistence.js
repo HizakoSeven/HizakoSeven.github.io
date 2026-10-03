@@ -6,8 +6,38 @@ import { renderRevisar, sincronizarControlesMotor } from './revisao.js';
 import { state } from './state.js';
 import { showToast, todayStr } from './utils.js';
 
-export var LOCAL_SERVER_MODE = (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
-  (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+/* Modo "servidor local" (server.ps1 salvando em dados.json). Estar em localhost NAO basta:
+   `python -m http.server` tambem e localhost e nao sabe salvar nada. Por isso o modo so e
+   ligado depois de detectarServidorLocal() confirmar que /dados responde (initApp chama isso). */
+export var LOCAL_SERVER_MODE = false;
+
+export function definirModoServidorLocal(valor){ LOCAL_SERVER_MODE = !!valor; }
+
+function ehLocalhost(){
+  return (window.location.protocol === 'http:' || window.location.protocol === 'https:') &&
+    (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1');
+}
+
+export async function detectarServidorLocal(){
+  if(!ehLocalhost()) return false;
+  try{
+    var res = await fetch('/dados', { cache:'no-store' });
+    return res.ok; /* servidor estatico comum responde 404 aqui */
+  }catch(e){
+    return false;
+  }
+}
+
+/* O servidor local parou de responder no meio da sessao: volta a mostrar os controles de backup
+   e o status do armazenamento do navegador, que o modo servidor tinha escondido. */
+async function voltarParaArmazenamentoDoNavegador(){
+  LOCAL_SERVER_MODE = false;
+  document.querySelectorAll('.save-bar').forEach(function(el){ el.style.display = ''; });
+  var infoEl = document.getElementById('saveBarInfo');
+  if(infoEl){ infoEl.style.display = 'inline'; infoEl.textContent = ''; }
+  state.storageOk = await testStorage();
+  renderStorageStatus();
+}
 
 export var APP_STATE_KEY = 'app_state';
 
@@ -169,8 +199,10 @@ export async function loadFromLocalServer(){
 export async function persist(){
   if(LOCAL_SERVER_MODE){
     var okLocal = await saveToLocalServer();
-    if(!okLocal){ warnStorageFailure(); }
-    return okLocal;
+    if(okLocal) return true;
+    /* nao perde o que o usuario acabou de fazer: grava no navegador e avisa */
+    await voltarParaArmazenamentoDoNavegador();
+    showToast('O servidor local não respondeu — passei a salvar neste navegador.');
   }
   return await saveJSON(APP_STATE_KEY, currentAppStateBlob());
 }

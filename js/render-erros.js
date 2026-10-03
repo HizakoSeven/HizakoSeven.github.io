@@ -4,6 +4,7 @@ import { switchTab } from './main.js';
 import { persist } from './persistence.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { REVISAO_ACERTOS_PARA_DOMINAR, renderRevisar, resetRevisaoInterativa } from './revisao.js';
+import { proximaRevisaoDe } from './revisao-agenda.js';
 import { state } from './state.js';
 import { addDaysStr, escapeHtml, formatPtDate, showToast, todayStr } from './utils.js';
 
@@ -98,6 +99,17 @@ export function renderErroBoardHTML(en, game){
     '</div>'+
     '<div class="move-status">'+escapeHtml(label)+'</div>'+
   '</div>';
+}
+
+/* Linha de status da revisao espacada no card: acertos e quando o erro volta a vencer. */
+export function revisaoStatusHTML(en){
+  if(en.resolvido) return '<div style="font-size:12px;color:var(--sage);margin:0 0 6px;">✓ Dominado na revisão espaçada</div>';
+  var hoje = todayStr();
+  var acertos = en.acertosSeguidos||0;
+  var p = proximaRevisaoDe(en);
+  var venceHoje = !p || p<=hoje;
+  if(acertos===0 && venceHoje) return '';
+  return '<div style="font-size:12px;color:var(--ink-soft);margin:0 0 6px;">Revisão: '+acertos+'/'+REVISAO_ACERTOS_PARA_DOMINAR+' acertos seguidos · '+(venceHoje ? 'vence hoje' : 'próxima em '+escapeHtml(formatPtDate(p)))+'</div>';
 }
 
 export function tipoLabel(tipo){
@@ -216,8 +228,7 @@ export function renderErros(){
           '<span class="erro-date">'+escapeHtml(formatPtDate(en.data))+(en.ritmo?' · '+escapeHtml(en.ritmo):'')+(en.resultado?' · '+escapeHtml(en.resultado):'')+'</span>'+
           '<span class="badge badge-'+en.tipo+'">'+tipoLabel(en.tipo)+'</span>'+
         '</div>'+
-        (en.resolvido ? '<div style="font-size:12px;color:var(--sage);margin:0 0 6px;">✓ Dominado na revisão espaçada</div>'
-          : ((en.acertosSeguidos||0)>0 ? '<div style="font-size:12px;color:var(--ink-soft);margin:0 0 6px;">Revisão: '+(en.acertosSeguidos||0)+'/'+REVISAO_ACERTOS_PARA_DOMINAR+' acertos seguidos</div>' : ''))+
+        revisaoStatusHTML(en)+
         (en.lance ? '<div class="erro-move">'+escapeHtml(en.lance)+escapeHtml(tempoInfo)+'</div>' : '')+
         (en.contexto ? '<div style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);">'+escapeHtml(en.contexto)+'</div>' : '')+
         (gameRef && gameRef.notaGeral ? '<div style="font-size:12.5px;color:var(--ink-soft);font-style:italic;margin-top:2px;">Nota da partida: "'+escapeHtml(gameRef.notaGeral)+'"</div>' : '')+

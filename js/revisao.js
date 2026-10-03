@@ -5,6 +5,7 @@ import { avaliarFEN, engineState } from './engine.js';
 import { persist } from './persistence.js';
 import { renderErros, tipoLabel } from './render-erros.js';
 import { renderHeaderStats } from './render-hoje.js';
+import { REVISAO_ACERTOS_PARA_DOMINAR, aplicarRespostaRevisao, listarAgendados, ordenarVencidos, proximaRevisaoDe } from './revisao-agenda.js';
 import { presetAtual, state } from './state.js';
 import { escapeHtml, formatPtDate, showToast, todayStr, wrapArray } from './utils.js';
 
@@ -70,7 +71,7 @@ export function aoTeclaRevisao(e){
 
 window.addEventListener('keydown', aoTeclaRevisao);
 
-export var REVISAO_ACERTOS_PARA_DOMINAR = 3;
+export { REVISAO_ACERTOS_PARA_DOMINAR }; /* definido em revisao-agenda.js */
 
 export var ENGINE_PERDA_ACEITAVEL = 80; /* centipawns: ate aqui, conta como acerto */
 
@@ -81,13 +82,26 @@ export function erroTemTabuleiroRevisavel(en){
   return g.fens[en.ply-1]!==undefined && g.fens[en.ply]!==undefined && g.applied[en.ply-1]!==undefined;
 }
 
+/* Fila de hoje: so os erros que venceram (ver revisao-agenda.js). */
 export function erroPendentesRevisao(){
-  return state.erros.filter(function(e){ return !e.resolvido; }).slice().sort(function(a,b){
-    var aa = a.acertosSeguidos||0, bb = b.acertosSeguidos||0;
-    if(aa!==bb) return aa-bb; /* quem tem menos acertos seguidos entra primeiro */
-    var au = a.ultimaRevisaoEm||0, bu = b.ultimaRevisaoEm||0;
-    return au-bu; /* nunca revisado (0) antes; depois o revisado há mais tempo */
-  });
+  return ordenarVencidos(state.erros, todayStr());
+}
+
+/* Erros ainda nao dominados cuja proxima revisao esta no futuro. */
+export function erroAgendados(){
+  return listarAgendados(state.erros, todayStr());
+}
+
+function filaResumoTexto(totalVencidos){
+  var ag = erroAgendados().length;
+  return totalVencidos+' para revisar hoje'+(ag ? ' · '+ag+' agendado'+(ag===1?'':'s') : '');
+}
+
+/* Aviso quando o erro mostrado ainda nao venceu: acertar nao avanca o contador. */
+function avisoAntecipadoHTML(en, resultado){
+  var p = proximaRevisaoDe(en);
+  if(resultado || en.resolvido || !p || p<=todayStr()) return '';
+  return '<p class="ci-sub" style="margin:-6px 0 12px;">Treino antecipado: esse erro só vence em '+escapeHtml(formatPtDate(p))+'. Acertar agora não avança o contador.</p>';
 }
 
 export function escolherProximaRevisao(excluirId){
@@ -144,7 +158,21 @@ export function renderRevisar(){
   }
 
   if(!state.revisao.atualId){
-    wrap.innerHTML = '<div class="empty-state">🎉 Você dominou todos os '+state.erros.length+' erros registrados ('+REVISAO_ACERTOS_PARA_DOMINAR+' acertos seguidos em cada). Continue jogando e catalogando — assim que surgir um erro novo, ele entra na fila.</div>';
+    var naoResolvidos = state.erros.filter(function(e){ return !e.resolvido; });
+    if(naoResolvidos.length===0){
+      wrap.innerHTML = '<div class="empty-state">🎉 Você dominou todos os '+state.erros.length+' erros registrados ('+REVISAO_ACERTOS_PARA_DOMINAR+' acertos seguidos em cada). Continue jogando e catalogando — assim que surgir um erro novo, ele entra na fila.</div>';
+      return;
+    }
+    var agendados = erroAgendados().sort(function(a, b){ return proximaRevisaoDe(a) < proximaRevisaoDe(b) ? -1 : 1; });
+    wrap.innerHTML = '<div class="empty-state">✅ Nada vence hoje. '+agendados.length+' erro'+(agendados.length===1?'':'s')+' agendado'+(agendados.length===1?'':'s')+' — o próximo volta em '+escapeHtml(formatPtDate(proximaRevisaoDe(agendados[0])))+'. Na repetição espaçada, acerto só conta quando o erro vence; treinar antes serve de prática, mas não avança.</div>'+
+      '<div class="btn-row" style="justify-content:center;margin-top:10px;"><button class="btn btn-ghost btn-sm" id="revTreinarAntecipadoBtn">Treinar mesmo assim</button></div>';
+    var treinarBtn = document.getElementById('revTreinarAntecipadoBtn');
+    if(treinarBtn) treinarBtn.addEventListener('click', function(){
+      state.revisao.atualId = agendados[0].id;
+      state.revisao.revelado = false;
+      resetRevisaoInterativa();
+      renderRevisar();
+    });
     return;
   }
 
@@ -202,7 +230,7 @@ export function renderRevisarSimples(wrap, en, game, temTabuleiro, totalPendente
   var flipped = game && game.meuLado==='b';
 
   var progressoHtml = '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);margin-bottom:4px;"><span>Rumo a dominar esse erro</span><span>'+acertos+' / '+REVISAO_ACERTOS_PARA_DOMINAR+' acertos seguidos</span></div>'+
-    '<div class="progress-bar" style="margin-bottom:14px;"><div class="progress-fill" style="width:'+Math.round(acertos/REVISAO_ACERTOS_PARA_DOMINAR*100)+'%;"></div></div>';
+    '<div class="progress-bar" style="margin-bottom:14px;"><div class="progress-fill" style="width:'+Math.round(acertos/REVISAO_ACERTOS_PARA_DOMINAR*100)+'%;"></div></div>'+avisoAntecipadoHTML(en, null);
 
   var boardHtml = '', navHtml = '';
   if(temTabuleiro){
@@ -251,7 +279,7 @@ export function renderRevisarSimples(wrap, en, game, temTabuleiro, totalPendente
   var animarS = ri.animarProximaRenderizacao; ri.animarProximaRenderizacao = false;
   wrap.innerHTML = '<div class="erro-card tipo-'+en.tipo+(animarS?' revisar-anim':'')+'">'+corpo+'</div>'+
     atalhosHintHTML(hintPares)+
-    '<p style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:8px;">'+totalPendentes+' pendente'+(totalPendentes===1?'':'s')+' na fila'+(en.vezesRevisado?' · já revisado '+en.vezesRevisado+'x antes':'')+'</p>';
+    '<p style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:8px;">'+filaResumoTexto(totalPendentes)+(en.vezesRevisado?' · já revisado '+en.vezesRevisado+'x antes':'')+'</p>';
 
   var navAnt = document.getElementById('revNavAnt');
   if(navAnt) navAnt.addEventListener('click', function(){ ri.cursorPly = Math.max(0, ri.cursorPly-1); renderRevisar(); });
@@ -419,7 +447,7 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
   if(ri.cursorPly===null || ri.cursorPly===undefined) ri.cursorPly = pre;
 
   var progressoHtml = '<div style="display:flex;justify-content:space-between;font-size:12px;color:var(--ink-soft);margin-bottom:4px;"><span>Rumo a dominar esse erro</span><span>'+acertos+' / '+REVISAO_ACERTOS_PARA_DOMINAR+' acertos seguidos</span></div>'+
-    '<div class="progress-bar" style="margin-bottom:14px;"><div class="progress-fill" style="width:'+Math.round(acertos/REVISAO_ACERTOS_PARA_DOMINAR*100)+'%;"></div></div>';
+    '<div class="progress-bar" style="margin-bottom:14px;"><div class="progress-fill" style="width:'+Math.round(acertos/REVISAO_ACERTOS_PARA_DOMINAR*100)+'%;"></div></div>'+avisoAntecipadoHTML(en, ri.resultado);
 
   if(!ri.refInfo && !ri.avaliando && !ri.resultado){
     ri.avaliando = true;
@@ -566,7 +594,7 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
   var animarM = ri.animarProximaRenderizacao; ri.animarProximaRenderizacao = false;
   wrap.innerHTML = '<div class="erro-card tipo-'+en.tipo+(animarM?' revisar-anim':'')+'">'+corpo+'</div>'+
     atalhosHintHTML(hintPares)+
-    '<p style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:8px;">'+totalPendentes+' pendente'+(totalPendentes===1?'':'s')+' na fila'+(en.vezesRevisado?' · já revisado '+en.vezesRevisado+'x antes':'')+infoMotorRodape+'</p>';
+    '<p style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:8px;">'+filaResumoTexto(totalPendentes)+(en.vezesRevisado?' · já revisado '+en.vezesRevisado+'x antes':'')+infoMotorRodape+'</p>';
 
   var boardEl = wrap.querySelector('.board.interativo');
   if(boardEl){
@@ -733,24 +761,22 @@ export function atualizarContadorRevisao(id, acertou){
   var idx = state.erros.findIndex(function(e){ return e.id===id; });
   if(idx===-1) return null;
   var en = state.erros[idx];
-  en.vezesRevisado = (en.vezesRevisado||0)+1;
-  en.ultimaRevisaoEm = Date.now();
-  var dominouAgora = false;
-  if(acertou){
-    en.acertosSeguidos = (en.acertosSeguidos||0)+1;
-    if(en.acertosSeguidos>=REVISAO_ACERTOS_PARA_DOMINAR){ en.resolvido = true; dominouAgora = true; }
-  } else {
-    en.acertosSeguidos = 0;
-  }
-  return { en:en, dominouAgora:dominouAgora };
+  var r = aplicarRespostaRevisao(en, acertou, todayStr(), Date.now());
+  return { en:en, dominouAgora:r.dominouAgora, contou:r.contou, proxima:r.proxima };
+}
+
+function avisarResultadoRevisao(r, acertou){
+  var quando = r.proxima ? formatPtDate(r.proxima) : '';
+  if(r.dominouAgora) showToast('Dominado! Esse erro saiu da fila de revisão.');
+  else if(!acertou) showToast('Sem problema — ele volta a vencer em '+quando+'.');
+  else if(!r.contou) showToast('Bom treino! Esse erro só avança a partir de '+quando+'.');
+  else showToast('Mandou bem — próxima revisão em '+quando+' (faltam '+(REVISAO_ACERTOS_PARA_DOMINAR-r.en.acertosSeguidos)+' acertos).');
 }
 
 export async function graduarRevisao(id, acertou){
   var r = atualizarContadorRevisao(id, acertou);
   if(!r) return;
-  if(r.dominouAgora) showToast('Dominado! Esse erro saiu da fila de revisão.');
-  else if(acertou) showToast('Mandou bem — mais '+(REVISAO_ACERTOS_PARA_DOMINAR-r.en.acertosSeguidos)+' pra dominar esse.');
-  else showToast('Sem problema — ele volta pra fila pra tentar de novo.');
+  avisarResultadoRevisao(r, acertou);
   await persist();
   state.revisao.atualId = escolherProximaRevisao(id);
   state.revisao.revelado = false;
@@ -763,7 +789,7 @@ export async function graduarRevisao(id, acertou){
 export async function aplicarResultadoRevisao(id, acertou){
   var r = atualizarContadorRevisao(id, acertou);
   if(!r) return;
-  if(r.dominouAgora) showToast('Dominado! Esse erro saiu da fila de revisão.');
+  avisarResultadoRevisao(r, acertou);
   await persist();
   renderErros();
   renderHeaderStats();

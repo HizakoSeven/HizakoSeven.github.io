@@ -2,6 +2,7 @@
 import { switchTab } from './main.js';
 import { persist } from './persistence.js';
 import { getTodayChecklist, state } from './state.js';
+import { atualizarStreakDoDia, streakEfetivo } from './streak.js';
 import { addDaysStr, escapeHtml, pluralDias, showToast, todayStr } from './utils.js';
 
 export var WEEKDAY_NAMES = ['Domingo','Segunda-feira','Terça-feira','Quarta-feira','Quinta-feira','Sexta-feira','Sábado'];
@@ -33,7 +34,7 @@ export var TACTICS_THEMES = [
 
 export function renderHeaderStats(){
   var s = 'partida'+(state.partidas.length===1?'':'s')+' · '+
-          state.erros.length+' erro'+(state.erros.length===1?'':'s')+' catalogado'+(state.erros.length===1?'':'s')+' · sequência de '+pluralDias(state.streak.currentStreak||0);
+          state.erros.length+' erro'+(state.erros.length===1?'':'s')+' catalogado'+(state.erros.length===1?'':'s')+' · sequência de '+pluralDias(streakEfetivo(state.streak, todayStr()));
   document.getElementById('statsMini').textContent = state.partidas.length+' '+s;
 }
 
@@ -71,8 +72,8 @@ export function renderHoje(){
       var todayChecklist = getTodayChecklist();
       todayChecklist[cb.dataset.block] = cb.checked;
       state.checklistByDate[todayStr()] = todayChecklist;
+      maybeUpdateStreak(); /* ajusta a sequencia (soma ou desfaz o dia) antes de gravar, numa gravacao so */
       await persist();
-      maybeUpdateStreak();
       renderHoje();
       renderHeaderStats();
     });
@@ -87,7 +88,7 @@ export function renderHoje(){
 
   document.getElementById('statPartidas').textContent = state.partidas.length;
   document.getElementById('statErros').textContent = state.erros.length;
-  document.getElementById('statStreak').textContent = state.streak.currentStreak||0;
+  document.getElementById('statStreak').textContent = streakEfetivo(state.streak, todayStr());
 
   renderTacticsWidget(dow);
   renderErrorTrend();
@@ -174,18 +175,8 @@ export function renderTacticsWidget(dow){
   }
 }
 
-export async function maybeUpdateStreak(){
-  var anyChecked = Object.values(getTodayChecklist()).some(Boolean);
-  if(!anyChecked) return;
-  var t = todayStr();
-  if(state.streak.lastActiveDate === t) return;
-  var yesterday = addDaysStr(t, -1);
-  if(state.streak.lastActiveDate === yesterday){
-    state.streak.currentStreak = (state.streak.currentStreak||0)+1;
-  } else {
-    state.streak.currentStreak = 1;
-  }
-  state.streak.lastActiveDate = t;
-  state.streak.longestStreak = Math.max(state.streak.longestStreak||0, state.streak.currentStreak);
-  await persist();
+/* Soma ou desfaz o dia de hoje na sequencia, conforme o checklist. Retorna true se mudou. */
+export function maybeUpdateStreak(){
+  var algumMarcado = Object.values(getTodayChecklist()).some(Boolean);
+  return atualizarStreakDoDia(state.streak, algumMarcado, todayStr());
 }

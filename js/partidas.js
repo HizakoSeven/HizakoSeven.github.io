@@ -8,6 +8,11 @@ import { MOTOR_PRESETS, state } from './state.js';
 import { renderPainelTempo } from './tempo.js';
 import { escapeHtml, formatPtDate, showToast, todayStr } from './utils.js';
 
+/* Qual (partida, lance) o painel de registro rapido esta mostrando. Evita reconstruir o painel
+   (e apagar o que a pessoa digitou) quando nada mudou - ex.: ao girar o tabuleiro. */
+var painelGameId = null;
+var painelPly = null;
+
 export function renderPartidas(){
   var wrap = document.getElementById('partidasListWrap');
   if(state.partidas.length===0){
@@ -115,6 +120,7 @@ export function renderViewer(){
   renderMovelist(game);
   renderAnaliseMotorUI(game);
   renderPainelTempo(game);
+  painelGameId = null; /* o HTML do viewer acabou de ser recriado: o painel precisa ser pintado */
   stepTo(state.currentPly, true);
 }
 
@@ -372,7 +378,7 @@ export function stepTo(ply, skipRerenderMovelist){
     btn.classList.toggle('current', parseInt(btn.dataset.ply,10)===ply);
   });
 
-  renderQuickErroPanel(game);
+  if(painelGameId!==game.id || painelPly!==ply) renderQuickErroPanel(game);
 }
 
 export function formatTimeControl(tc){
@@ -411,6 +417,8 @@ export function proximoPlyComErroPendente(game, plyAtual){
 export function renderQuickErroPanel(game){
   var panel = document.getElementById('quickErroPanel');
   if(!panel) return;
+  painelGameId = game.id;
+  painelPly = state.currentPly;
   var ply = state.currentPly;
   var mv = ply>0 ? game.applied[ply-1] : null;
   var label = '(posição inicial)';
@@ -597,12 +605,22 @@ export function renderQuickErroPanel(game){
   });
 }
 
+/* Teclas de navegacao nao podem agir enquanto a pessoa digita (nota geral, motivo, padrao...)
+   nem com modificadores (Alt+Seta e "voltar" do navegador). */
+function teclaEmCampoDeTexto(e){
+  var t = e.target;
+  if(!t || !t.tagName) return false;
+  return /^(INPUT|TEXTAREA|SELECT)$/.test(t.tagName) || !!t.isContentEditable;
+}
+
 document.addEventListener('keydown', function(e){
   if(!state.openGameId || state.activeTab!=='partidas') return;
+  if(e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+  if(teclaEmCampoDeTexto(e)) return;
   var game = state.partidas.find(function(g){ return g.id===state.openGameId; });
   if(!game) return;
-  if(e.key==='ArrowLeft'){ stepTo(Math.max(0,state.currentPly-1)); }
-  else if(e.key==='ArrowRight'){ stepTo(Math.min(game.fens.length-1,state.currentPly+1)); }
-  else if(e.key==='Home'){ stepTo(0); }
-  else if(e.key==='End'){ stepTo(game.fens.length-1); }
+  if(e.key==='ArrowLeft'){ e.preventDefault(); stepTo(Math.max(0,state.currentPly-1)); }
+  else if(e.key==='ArrowRight'){ e.preventDefault(); stepTo(Math.min(game.fens.length-1,state.currentPly+1)); }
+  else if(e.key==='Home'){ e.preventDefault(); stepTo(0); }
+  else if(e.key==='End'){ e.preventDefault(); stepTo(game.fens.length-1); }
 });

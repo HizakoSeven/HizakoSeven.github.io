@@ -1,6 +1,6 @@
 /* Ponto de entrada: listeners globais, troca de abas, inicializacao do app. */
 import { renderPartidas, renderViewer } from './partidas.js';
-import { APP_STATE_KEY, LOCAL_SERVER_MODE, applyStateBlob, backfillMeuLado, loadFromLocalServer, loadJSON, persist, renderStorageStatus, testStorage } from './persistence.js';
+import { APP_STATE_KEY, LOCAL_SERVER_MODE, applyStateBlob, backfillMeuLado, definirModoServidorLocal, detectarServidorLocal, loadFromLocalServer, loadJSON, persist, renderStorageStatus, testStorage } from './persistence.js';
 import { openErroForm, renderErros } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { renderRevisar, sincronizarControlesMotor } from './revisao.js';
@@ -103,6 +103,7 @@ document.querySelectorAll('.tab-btn').forEach(function(btn){
 });
 
 export async function initApp(){
+  definirModoServidorLocal(await detectarServidorLocal());
   if(LOCAL_SERVER_MODE){
     document.querySelectorAll('.save-bar').forEach(function(el){ el.style.display='none'; });
     var infoEl = document.getElementById('saveBarInfo');
