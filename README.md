@@ -1,8 +1,12 @@
+
 # Caderno de Xadrez
 
 App gratuito de estudo de xadrez que roda inteiro no navegador: caderno de erros, revisão espaçada, importação de PGN (Chess.com/Lichess), análise completa com Stockfish e gráfico de tempo × erro por lance.
 
 **Use online:** https://hizakoseven.github.io/
+
+
+<img width="854" height="480" alt="2026-10-03 17-02-13 (online-video-cutter com)" src="https://github.com/user-attachments/assets/4c35bd40-b764-4d38-8288-e98ff70f17a4" />
 
 ## Seus dados
 Tudo fica salvo **no seu próprio navegador** (IndexedDB). Nada é enviado a servidor nenhum. Use os botões "Salvar arquivo" / "Carregar arquivo" no topo para fazer backup ou levar seus dados para outro navegador/computador.
