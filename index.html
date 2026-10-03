@@ -235,7 +235,17 @@
   .viewer{display:grid;grid-template-columns:minmax(0,420px) 1fr;gap:var(--sp-5);margin-top:var(--sp-4);align-items:start;}
   @media (max-width:720px){.viewer{grid-template-columns:1fr;}}
   .viewer-side{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0;}
-  .board-wrap{width:100%;}
+  .board-wrap{width:100%;position:relative;}
+  .board-row{display:flex;gap:8px;align-items:stretch;margin:0 auto;}
+  .board-row .board-wrap{flex:1;min-width:0;}
+  .board-setas{position:absolute;left:0;top:0;width:100%;height:100%;pointer-events:none;}
+  .vbar{position:relative;width:24px;flex:none;border-radius:4px;overflow:hidden;border:1px solid var(--line);}
+  .vbar-fill{position:absolute;left:0;right:0;bottom:0;transition:height .4s ease;}
+  .vbar-num{position:absolute;left:0;right:0;text-align:center;font:700 9px/1 var(--font-mono);color:#fff;mix-blend-mode:difference;}
+  .board.interativo{touch-action:none;}
+  .board.arrastando{cursor:grabbing;}
+  .sq.drag-over{box-shadow:inset 0 0 0 3px rgba(255,255,255,.8);}
+  .board img{-webkit-user-drag:none;user-select:none;}
   .board{
     display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
     aspect-ratio:1/1;width:100%;
@@ -360,15 +370,7 @@
       <span style="opacity:.7;">(usado pra saber de que lado você jogou, sozinho)</span>
     </p>
     <p class="storage-status" id="storageStatus" style="display:none;"></p>
-    <div class="save-bar">
-      <span class="save-bar-group-label">Backup (opcional):</span>
-      <button class="btn btn-ghost btn-sm" id="saveFileBtn">💾 Baixar backup</button>
-      <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">
-        Carregar backup
-        <input type="file" id="loadFileInput" accept=".json" style="display:none;">
-      </label>
-      <span class="save-bar-info" id="saveBarInfo" style="display:inline;margin:0;"></span>
-    </div>
+
     <nav class="tabs" role="tablist">
       <button class="tab-btn active" data-tab="hoje" role="tab">Hoje</button>
       <button class="tab-btn" data-tab="plano" role="tab">Plano</button>
@@ -691,7 +693,16 @@
   </main>
 
   <footer>
-    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 5</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
+    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 6</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
+    <div class="save-bar" style="margin:8px 0 0;font-size:12px;">
+      <span class="save-bar-group-label">Backup:</span>
+      <button class="btn btn-ghost btn-sm" id="saveFileBtn">Baixar</button>
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">
+        Carregar
+        <input type="file" id="loadFileInput" accept=".json" style="display:none;">
+      </label>
+      <span class="save-bar-info" id="saveBarInfo" style="display:inline;margin:0;"></span>
+    </div>
   </footer>
 
 </div>

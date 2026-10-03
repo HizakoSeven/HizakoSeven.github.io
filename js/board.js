@@ -74,3 +74,33 @@ export function boardSquaresHTML(fen, lastMove, flipped, extraClasses){
   });
   return html;
 }
+
+/* Setas (SVG) sobre o tabuleiro. `setas` = [{from:'e2', to:'e4', cor:'#3f8f4a'}].
+   O SVG usa um viewBox 800x800 (cada casa = 100x100) e respeita o tabuleiro invertido. */
+export function setasSVG(setas, flipped){
+  setas = (setas||[]).filter(Boolean);
+  if(!setas.length) return '';
+  function centro(sq){
+    var f = FILES.indexOf(sq.charAt(0));
+    var r = parseInt(sq.charAt(1), 10);
+    return { x:(flipped ? 7-f : f)*100+50, y:(flipped ? r-1 : 8-r)*100+50 };
+  }
+  var corpo = setas.map(function(s){
+    var a = centro(s.from), t = centro(s.to);
+    var dx = t.x-a.x, dy = t.y-a.y;
+    var len = Math.sqrt(dx*dx+dy*dy);
+    if(!len) return '';
+    var ux = dx/len, uy = dy/len, px = -uy, py = ux;
+    var ponta = { x:t.x-ux*8, y:t.y-uy*8 };
+    var cabeca = 38, larg = 24;
+    var base = { x:ponta.x-ux*cabeca, y:ponta.y-uy*cabeca };
+    var ini = { x:a.x+ux*20, y:a.y+uy*20 };
+    return '<g fill="'+s.cor+'" stroke="'+s.cor+'">'+
+      '<line x1="'+ini.x.toFixed(1)+'" y1="'+ini.y.toFixed(1)+'" x2="'+base.x.toFixed(1)+'" y2="'+base.y.toFixed(1)+'" stroke-width="16"/>'+
+      '<polygon stroke="none" points="'+ponta.x.toFixed(1)+','+ponta.y.toFixed(1)+' '+
+        (base.x+px*larg).toFixed(1)+','+(base.y+py*larg).toFixed(1)+' '+
+        (base.x-px*larg).toFixed(1)+','+(base.y-py*larg).toFixed(1)+'"/>'+
+    '</g>';
+  }).join('');
+  return '<svg class="board-setas" viewBox="0 0 800 800" aria-hidden="true"><g opacity="0.82">'+corpo+'</g></svg>';
+}

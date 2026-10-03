@@ -1,6 +1,6 @@
 /* Revisao espacada dos erros catalogados - modo simples e modo com motor. */
 import { classificarLanceCompleto, materialBalance, normalizarAvaliacao, pctBarraDeCp, pvParaSan } from './analysis.js';
-import { boardSquaresHTML } from './board.js';
+import { boardSquaresHTML, setasSVG } from './board.js';
 import { avaliarFEN, engineState } from './engine.js';
 import { persist } from './persistence.js';
 import { renderErros, tipoLabel } from './render-erros.js';
@@ -276,6 +276,139 @@ export function renderRevisarSimples(wrap, en, game, temTabuleiro, totalPendente
   if(acerteiBtn) acerteiBtn.addEventListener('click', function(){ graduarRevisao(en.id, true); });
 }
 
+/* ---------- Tabuleiro da revisao: barra de avaliacao, setas e arrastar-e-soltar ---------- */
+var COR_SETA_MELHOR = '#3f8f4a';
+var COR_SETA_TENTATIVA = '#e08a1e';
+var COR_SETA_PARTIDA = '#c0392b';
+
+function avalCurtoDe(norm){
+  if(norm.mate!==null && norm.mate!==undefined) return 'M'+Math.abs(norm.mate);
+  var v = (norm.cp||0)/100;
+  return (v>=0 ? '+' : '−')+Math.abs(v).toFixed(1);
+}
+
+function setaDeUci(uci, cor){
+  return (uci && uci.length>=4) ? { from:uci.slice(0,2), to:uci.slice(2,4), cor:cor } : null;
+}
+
+function barraAvaliacaoHTML(b){
+  var fillCor = b.corBaixo==='w' ? '#f2f0e8' : '#2b2b2b';
+  var fundo = b.corBaixo==='w' ? '#2b2b2b' : '#f2f0e8';
+  var pos = b.pctBaixo>=50 ? 'bottom:3px;' : 'top:3px;';
+  return '<div class="vbar" style="background:'+fundo+';" title="'+escapeHtml(b.titulo)+'" role="img" aria-label="'+escapeHtml(b.titulo+': '+b.texto)+'">'+
+    '<div class="vbar-fill" style="height:'+b.pctBaixo+'%;background:'+fillCor+';"></div>'+
+    '<div class="vbar-num" style="'+pos+'">'+escapeHtml(b.curto)+'</div>'+
+  '</div>';
+}
+
+function blocoTabuleiro(classeExtra, squaresHtml, setas, barra, flipped){
+  return '<div class="board-row" style="max-width:'+(barra?456:420)+'px;">'+
+    (barra ? barraAvaliacaoHTML(barra) : '')+
+    '<div class="board-wrap"><div class="board'+classeExtra+'">'+squaresHtml+'</div>'+setasSVG(setas, flipped)+'</div>'+
+  '</div>';
+}
+
+/* Arrastar e soltar (mouse e toque) + clique. Nao re-renderiza durante o arraste. */
+function ligarArrastarSoltar(boardEl, en, game, fenAntes){
+  var ri = state.revisaoInterativa;
+  var drag = null;
+
+  boardEl.addEventListener('dragstart', function(e){ e.preventDefault(); });
+
+  function sqSobPonto(x, y){
+    var el = document.elementFromPoint(x, y);
+    var sqEl = el && el.closest ? el.closest('.sq') : null;
+    return (sqEl && boardEl.contains(sqEl)) ? sqEl : null;
+  }
+  function limparMarcas(){
+    wrapArray(boardEl.querySelectorAll('.sq.selected, .sq.legal-move, .sq.drag-over')).forEach(function(el){
+      el.classList.remove('selected'); el.classList.remove('legal-move'); el.classList.remove('drag-over');
+    });
+  }
+  function encerrar(){
+    if(drag){
+      if(drag.ghost && drag.ghost.parentNode) drag.ghost.parentNode.removeChild(drag.ghost);
+      if(drag.imgOrig) drag.imgOrig.style.opacity = '';
+    }
+    boardEl.classList.remove('arrastando');
+    drag = null;
+  }
+  function destinosDe(legais){ return legais.map(function(m){ return { to:m.to, promotion:m.promotion }; }); }
+
+  boardEl.addEventListener('pointerdown', function(ev){
+    if(ev.pointerType==='mouse' && ev.button!==0) return;
+    if(ri.avaliando || ri.resultado || ri.promocaoPendente || !ri.refInfo) return;
+    var sqEl = ev.target.closest('.sq');
+    if(!sqEl) return;
+    var c = new Chess(fenAntes);
+    var peca = c.get(sqEl.dataset.sq);
+    var propria = !!(peca && peca.color===c.turn());
+    drag = {
+      sq: sqEl.dataset.sq, sqEl: sqEl, x0: ev.clientX, y0: ev.clientY, moved: false,
+      propria: propria, legais: propria ? c.moves({ square:sqEl.dataset.sq, verbose:true }) : [],
+      ghost: null, imgOrig: null, gw: 0, gh: 0, id: ev.pointerId
+    };
+    try{ boardEl.setPointerCapture(ev.pointerId); }catch(e){}
+  });
+
+  boardEl.addEventListener('pointermove', function(ev){
+    if(!drag || ev.pointerId!==drag.id) return;
+    if(!drag.propria || !drag.legais.length) return;
+    if(!drag.moved){
+      if(Math.abs(ev.clientX-drag.x0)+Math.abs(ev.clientY-drag.y0) < 6) return;
+      drag.moved = true;
+      var img = drag.sqEl.querySelector('.piece-icon');
+      if(img){
+        var r = img.getBoundingClientRect();
+        var g = img.cloneNode(true);
+        g.style.cssText = 'position:fixed;left:0;top:0;margin:0;pointer-events:none;z-index:1000;width:'+r.width+'px;height:'+r.height+'px;';
+        document.body.appendChild(g);
+        drag.ghost = g; drag.gw = r.width; drag.gh = r.height;
+        img.style.opacity = '0.3'; drag.imgOrig = img;
+      }
+      limparMarcas();
+      drag.sqEl.classList.add('selected');
+      drag.legais.forEach(function(m){
+        var el = boardEl.querySelector('[data-sq="'+m.to+'"]');
+        if(el) el.classList.add('legal-move');
+      });
+      boardEl.classList.add('arrastando');
+    }
+    if(drag.ghost) drag.ghost.style.transform = 'translate('+(ev.clientX-drag.gw/2)+'px,'+(ev.clientY-drag.gh/2)+'px)';
+    wrapArray(boardEl.querySelectorAll('.sq.drag-over')).forEach(function(x){ x.classList.remove('drag-over'); });
+    var alvo = sqSobPonto(ev.clientX, ev.clientY);
+    if(alvo) alvo.classList.add('drag-over');
+  });
+
+  boardEl.addEventListener('pointerup', function(ev){
+    if(!drag || ev.pointerId!==drag.id) return;
+    var d = drag;
+    var alvoEl = sqSobPonto(ev.clientX, ev.clientY);
+    var alvo = alvoEl ? alvoEl.dataset.sq : null;
+    encerrar();
+    if(!d.moved){ onCliqueCasaRevisao(d.sq, en, game, fenAntes); return; } /* foi so um clique */
+    var legalAlvo = alvo ? d.legais.filter(function(m){ return m.to===alvo; }) : [];
+    if(legalAlvo.length){
+      ri.selecionada = d.sq;
+      ri.destinos = destinosDe(d.legais);
+      onCliqueCasaRevisao(alvo, en, game, fenAntes); /* cuida de promocao e de efetivar o lance */
+    } else if(alvo===d.sq){
+      ri.selecionada = d.sq;
+      ri.destinos = destinosDe(d.legais);
+      renderRevisar();
+    } else {
+      ri.selecionada = null; ri.destinos = [];
+      renderRevisar();
+    }
+  });
+
+  boardEl.addEventListener('pointercancel', function(){
+    if(!drag) return;
+    encerrar();
+    renderRevisar();
+  });
+}
+
 export function renderRevisarComMotor(wrap, en, game, totalPendentes){
   var ri = state.revisaoInterativa;
   var acertos = en.acertosSeguidos||0;
@@ -304,6 +437,22 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
 
   var boardHtml, navHtml = '', cursorInfo;
   var interativo = false;
+  var legendaSetas = '';
+
+  var melhorUci = null, barraRef = null, barraSua = null;
+  if(ri.resultado){
+    melhorUci = ri.refBestUci || (ri.refInfo && ri.refInfo.pv && ri.refInfo.pv[0]) || null;
+    var moverCor = new Chess(fenAntes).turn();
+    var corBaixo = flipped ? 'b' : 'w';
+    var paraBaixo = function(pctMover){
+      var pctBranco = moverCor==='w' ? pctMover : 100-pctMover;
+      return corBaixo==='w' ? pctBranco : 100-pctBranco;
+    };
+    var refNormB = normalizarAvaliacao(ri.refInfo, false);
+    var refPctB = refNormB.mate!==null ? (refNormB.mate>0 ? 92 : 8) : pctBarraDeCp(refNormB.cp);
+    barraRef = { pctBaixo:paraBaixo(refPctB), texto:refNormB.texto, curto:avalCurtoDe(refNormB), corBaixo:corBaixo, titulo:'Avaliação da posição com o melhor jogo' };
+    barraSua = { pctBaixo:paraBaixo(ri.resultado.pctBarra), texto:ri.resultado.avalTexto, curto:ri.resultado.avalCurto || '', corBaixo:corBaixo, titulo:'Avaliação depois do seu lance' };
+  }
 
   if(!ri.resultado){
     var maxAntes = pre;
@@ -320,7 +469,7 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
         ri.destinos.forEach(function(d){ extraClasses[d.to] = 'legal-move'; });
       }
     }
-    boardHtml = '<div class="board-wrap" style="max-width:420px;margin:0 auto;"><div class="board'+(interativo?' interativo':'')+'">'+boardSquaresHTML(fenExib, lastMoveExib, flipped, extraClasses)+'</div></div>';
+    boardHtml = blocoTabuleiro(interativo?' interativo':'', boardSquaresHTML(fenExib, lastMoveExib, flipped, extraClasses), null, null, flipped);
     navHtml = navPlyHTML(cursorA, maxAntes);
   } else {
     if(ri.timeline==='sua'){
@@ -329,7 +478,14 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
       var cursorS = Math.max(0, Math.min(ri.cursorPly, maxS));
       ri.cursorPly = cursorS;
       var lastMoveS = cursorS===1 ? ri.resultado.lanceUsuario : null;
-      boardHtml = '<div class="board-wrap" style="max-width:420px;margin:0 auto;"><div class="board">'+boardSquaresHTML(seqSua[cursorS], lastMoveS, flipped)+'</div></div>';
+      var setasS = [];
+      if(cursorS===0){
+        var lu = ri.resultado.lanceUsuario;
+        setasS.push(setaDeUci(melhorUci, COR_SETA_MELHOR));
+        if(lu && (lu.from+lu.to)!==(melhorUci||'').slice(0,4)) setasS.push({ from:lu.from, to:lu.to, cor:COR_SETA_TENTATIVA });
+        legendaSetas = 'Seta verde: melhor lance do motor · laranja: a sua tentativa.';
+      }
+      boardHtml = blocoTabuleiro('', boardSquaresHTML(seqSua[cursorS], lastMoveS, flipped), setasS, cursorS===1 ? barraSua : barraRef, flipped);
       navHtml = navPlyHTML(cursorS, maxS);
     } else if(ri.timeline==='motor' && ri.linhaMotor){
       var maxM = ri.linhaMotor.fens.length-1;
@@ -337,14 +493,23 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
       ri.cursorPly = cursorM;
       var ucM = cursorM>0 ? ri.linhaMotor.uci[cursorM-1] : null;
       var lastMoveM = ucM ? {from:ucM.slice(0,2), to:ucM.slice(2,4)} : null;
-      boardHtml = '<div class="board-wrap" style="max-width:420px;margin:0 auto;"><div class="board">'+boardSquaresHTML(ri.linhaMotor.fens[cursorM], lastMoveM, flipped)+'</div></div>';
+      var setaM = setaDeUci(ri.linhaMotor.uci[cursorM], COR_SETA_MELHOR);
+      if(setaM) legendaSetas = 'Seta verde: próximo lance da sugestão do motor.';
+      boardHtml = blocoTabuleiro('', boardSquaresHTML(ri.linhaMotor.fens[cursorM], lastMoveM, flipped), [setaM], barraRef, flipped);
       navHtml = navPlyHTML(cursorM, maxM);
     } else {
       var maxJ = game.fens.length-1;
       var cursorJ = Math.max(0, Math.min(ri.cursorPly, maxJ));
       ri.cursorPly = cursorJ;
       var lastMoveJ = cursorJ>0 ? game.applied[cursorJ-1] : null;
-      boardHtml = '<div class="board-wrap" style="max-width:420px;margin:0 auto;"><div class="board">'+boardSquaresHTML(game.fens[cursorJ], lastMoveJ, flipped)+'</div></div>';
+      var setasJ = [];
+      if(cursorJ===pre){
+        var mvReal = game.applied[pre];
+        setasJ.push(setaDeUci(melhorUci, COR_SETA_MELHOR));
+        if(mvReal && (mvReal.from+mvReal.to)!==(melhorUci||'').slice(0,4)) setasJ.push({ from:mvReal.from, to:mvReal.to, cor:COR_SETA_PARTIDA });
+        legendaSetas = 'Seta verde: melhor lance do motor · vermelha: o que você jogou na partida.';
+      }
+      boardHtml = blocoTabuleiro('', boardSquaresHTML(game.fens[cursorJ], lastMoveJ, flipped), setasJ, barraRef, flipped);
       navHtml = navPlyHTML(cursorJ, maxJ);
     }
   }
@@ -378,7 +543,6 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
     var r = ri.resultado;
     var bannerClasse = (r.classe==='otima'||r.classe==='boa'||r.classe==='brilhante'||r.classe==='great') ? 'certo' : (r.classe==='imprecisao' ? 'mediano' : 'errado');
     corpo += '<div class="feedback-banner '+bannerClasse+'">'+escapeHtml(r.texto)+'</div>'+
-      '<div class="eval-bar"><div class="eval-bar-fill" style="width:'+r.pctBarra+'%;"></div></div>'+
       '<div class="eval-bar-label">Você jogou '+escapeHtml(r.sanUsuario)+' (avaliação '+escapeHtml(r.avalTexto)+')'+(r.perda>20 && r.bestSan ? ' · motor preferia '+escapeHtml(r.bestSan) : '')+'</div>'+
       '<div class="linha-toggle">'+
         '<button type="button" class="btn btn-ghost'+(ri.timeline==='sua'?' ativa':'')+'" id="revVerSua">Sua tentativa</button>'+
@@ -386,6 +550,7 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
         '<button type="button" class="btn btn-ghost'+(ri.timeline==='motor'?' ativa':'')+'" id="revVerMotor">Sugestão do motor</button>'+
       '</div>'+
       boardHtml+navHtml+
+      (legendaSetas ? '<div class="eval-bar-label">'+escapeHtml(legendaSetas)+'</div>' : '')+
       renderLinhasMotorHTML(fenAntes, ri.refLinhas)+
       (en.contexto ? '<div style="font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin-top:6px;">'+escapeHtml(en.contexto)+'</div>' : '')+
       (en.motivo ? '<div class="erro-field-label">O que eu devia ter pensado</div><div class="erro-field-val">'+escapeHtml(en.motivo)+'</div>' : '')+
@@ -405,11 +570,7 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
 
   var boardEl = wrap.querySelector('.board.interativo');
   if(boardEl){
-    boardEl.addEventListener('click', function(ev){
-      var sqEl = ev.target.closest('.sq');
-      if(!sqEl) return;
-      onCliqueCasaRevisao(sqEl.dataset.sq, en, game, fenAntes);
-    });
+    ligarArrastarSoltar(boardEl, en, game, fenAntes);
   }
   wrap.querySelectorAll('[data-promo]').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -553,6 +714,7 @@ export function efetivarLanceRevisao(de, para, promocao, en, game, fenAntes){
       texto: cls.texto,
       bestSan: bestSan,
       avalTexto: aposNorm.texto,
+      avalCurto: avalCurtoDe(aposNorm),
       pctBarra: aposNorm.mate!==null ? (aposNorm.mate>0?92:8) : pctBarraDeCp(aposNorm.cp)
     };
     ri.timeline = 'sua';
