@@ -1,0 +1,752 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Caderno de Xadrez — estudo, erros e revisão com Stockfish</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bitter:wght@400;600;700;800&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --board-dark:#24402F;
+    --board-dark-2:#1B3324;
+    --board-light:#EAE2CE;
+    --paper:#F6F1E4;
+    --card:#FBF8EF;
+    --ink:#241A14;
+    --ink-soft:#5B4A3A;
+    --brass:#B8863B;
+    --brass-deep:#8C6526;
+    --flag-red:#9C4132;
+    --amber:#C9974A;
+    --sage:#6B7A5E;
+    --good:#3F7A52;
+    --sq-light:#EEEED2;
+    --sq-dark:#769656;
+    --sq-highlight:#BACA44;
+    --line:rgba(36,26,20,0.14);
+    --shadow:rgba(36,26,20,0.22);
+    --radius:10px;
+    --radius-sm:5px;
+    --sp-1:4px;--sp-2:8px;--sp-3:12px;--sp-4:16px;--sp-5:24px;--sp-6:32px;--sp-7:48px;
+    --font-display:'Bitter', Georgia, serif;
+    --font-mono:'IBM Plex Mono','Courier New', monospace;
+    --font-body:'IBM Plex Sans', -apple-system, BlinkMacSystemFont, sans-serif;
+  }
+  *{box-sizing:border-box;}
+  html,body{margin:0;padding:0;}
+  body{
+    background:var(--paper);
+    color:var(--ink);
+    font-family:var(--font-body);
+    line-height:1.5;
+    -webkit-font-smoothing:antialiased;
+  }
+  .app{max-width:1000px;margin:0 auto;padding:0 var(--sp-4) var(--sp-7);}
+  a{color:var(--brass-deep);}
+
+  .rank-strip{display:grid;grid-template-columns:repeat(8,1fr);height:6px;border-radius:3px;overflow:hidden;}
+  .rank-strip span:nth-child(odd){background:var(--board-light);}
+  .rank-strip span:nth-child(even){background:var(--board-dark);}
+  .divider{margin:var(--sp-6) 0 var(--sp-5);}
+
+  .app-header{padding-top:var(--sp-5);}
+  .app-header h1{
+    font-family:var(--font-display);
+    font-weight:800;
+    font-size:clamp(28px,5vw,40px);
+    margin:var(--sp-3) 0 2px;
+    letter-spacing:-0.01em;
+  }
+  .subtitle{
+    font-family:var(--font-mono);
+    font-size:13px;
+    color:var(--ink-soft);
+    margin:0 0 var(--sp-3);
+    letter-spacing:0.02em;
+  }
+  .stats-mini{
+    font-family:var(--font-mono);
+    font-size:12px;
+    color:var(--brass-deep);
+    margin:0 0 var(--sp-2);
+  }
+  .storage-status{
+    font-family:var(--font-mono);
+    font-size:12px;
+    margin:0 0 var(--sp-4);
+    padding:8px 12px;
+    border-radius:var(--radius-sm);
+    line-height:1.5;
+  }
+  .storage-status.ok{background:transparent;color:var(--sage);padding:0 0 0;}
+  .storage-status.bad{background:#F3E2DD;color:var(--flag-red);border:1px solid var(--flag-red);}
+  .save-bar{display:flex;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-2);}
+  .save-bar-group-label{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+  .save-bar-info{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);display:block;margin-bottom:var(--sp-4);}
+  .fatal-banner{
+    position:fixed;top:0;left:0;right:0;z-index:2000;
+    background:var(--flag-red);color:#fff;font-family:var(--font-mono);font-size:12.5px;
+    padding:10px 16px;text-align:center;
+  }
+  nav.tabs{display:flex;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:var(--sp-5);}
+  .tab-btn{
+    font-family:var(--font-body);
+    font-weight:600;
+    font-size:14px;
+    padding:9px 16px;
+    border:1.5px solid var(--line);
+    background:var(--card);
+    color:var(--ink-soft);
+    border-radius:999px;
+    cursor:pointer;
+    transition:background .15s,color .15s,border-color .15s;
+  }
+  .tab-btn:hover{border-color:var(--brass);}
+  .tab-btn.active{background:var(--board-dark);color:var(--board-light);border-color:var(--board-dark);}
+  .tab-btn:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible, summary:focus-visible{
+    outline:2.5px solid var(--brass); outline-offset:2px;
+  }
+
+  .tab-panel{display:none;}
+  .tab-panel.active{display:block;animation:fade .2s ease-out;}
+  @media (prefers-reduced-motion: reduce){ .tab-panel.active{animation:none;} }
+  @keyframes fade{from{opacity:0;transform:translateY(4px);}to{opacity:1;transform:none;}}
+
+  .card{
+    background:var(--card);
+    border:1px solid var(--line);
+    border-radius:var(--radius);
+    padding:var(--sp-5);
+    margin-bottom:var(--sp-4);
+    box-shadow:0 2px 8px rgba(36,26,20,0.05);
+  }
+  .card h2{font-family:var(--font-display);font-size:22px;margin:0 0 var(--sp-2);}
+  .card h3{font-family:var(--font-display);font-size:17px;margin:0 0 var(--sp-2);}
+  .lede{color:var(--ink-soft);margin:0 0 var(--sp-4);font-size:14.5px;}
+
+  .empty-state{
+    text-align:center;padding:var(--sp-6) var(--sp-4);color:var(--ink-soft);
+    border:1.5px dashed var(--line);border-radius:var(--radius);
+  }
+
+  .btn{
+    font-family:var(--font-body);font-weight:600;font-size:14px;
+    padding:10px 18px;border-radius:var(--radius-sm);border:1.5px solid transparent;
+    cursor:pointer;transition:filter .15s, background .15s;
+  }
+  .btn-primary{background:var(--board-dark);color:var(--board-light);}
+  .btn-primary:hover{filter:brightness(1.15);}
+  .btn-ghost{background:transparent;color:var(--ink-soft);border-color:var(--line);}
+  .btn-ghost:hover{border-color:var(--brass);color:var(--ink);}
+  .btn-danger{background:transparent;color:var(--flag-red);border-color:var(--flag-red);}
+  .btn-danger:hover{background:var(--flag-red);color:#fff;}
+  .btn-sm{padding:6px 12px;font-size:12.5px;}
+  .btn-row{display:flex;gap:var(--sp-2);flex-wrap:wrap;}
+  .btn:disabled{opacity:0.4;cursor:not-allowed;}
+
+  label{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);margin-bottom:4px;text-transform:uppercase;letter-spacing:0.03em;}
+  input[type=text], input[type=date], textarea, select{
+    width:100%;font-family:var(--font-body);font-size:14.5px;color:var(--ink);
+    background:#fff;border:1.5px solid var(--line);border-radius:var(--radius-sm);
+    padding:9px 11px;margin-bottom:var(--sp-3);
+  }
+  input[type=checkbox]{width:18px;height:18px;accent-color:var(--board-dark);flex-shrink:0;}
+  textarea{resize:vertical;min-height:60px;font-family:var(--font-body);}
+  .field-row{display:grid;grid-template-columns:1fr 1fr;gap:var(--sp-3);}
+  @media (max-width:560px){.field-row{grid-template-columns:1fr;}}
+
+  .badge{display:inline-block;font-family:var(--font-mono);font-size:11px;font-weight:600;padding:3px 9px;border-radius:999px;color:#fff;letter-spacing:0.02em;}
+  .badge-blunder{background:var(--flag-red);}
+  .badge-mistake{background:var(--amber);color:var(--ink);}
+  .badge-inaccuracy{background:var(--sage);}
+  .badge-miss{background:#6B4C7A;}
+  .badge-brilliant{background:#1F7A72;}
+  .badge-great{background:#2E6E9E;}
+
+  .today-focus{
+    background:var(--board-dark);color:var(--board-light);border-radius:var(--radius);
+    padding:var(--sp-5);margin-bottom:var(--sp-4);
+  }
+  .today-focus .day-label{font-family:var(--font-mono);font-size:12px;opacity:0.75;text-transform:uppercase;letter-spacing:0.06em;}
+  .today-focus h2{font-family:var(--font-display);margin:6px 0 4px;font-size:24px;}
+  .checklist-item{
+    display:flex;align-items:flex-start;gap:var(--sp-3);
+    padding:var(--sp-3) 0;border-bottom:1px solid var(--line);
+  }
+  .checklist-item:last-child{border-bottom:none;}
+  .checklist-item .ci-text{flex:1;}
+  .checklist-item .ci-title{font-weight:600;font-size:14.5px;}
+  .checklist-item .ci-sub{font-size:13px;color:var(--ink-soft);margin-top:2px;}
+  .checklist-item.done .ci-title{text-decoration:line-through;color:var(--ink-soft);}
+  .progress-bar{height:8px;background:var(--line);border-radius:999px;overflow:hidden;margin:var(--sp-2) 0 var(--sp-4);}
+  .progress-fill{height:100%;background:var(--brass);transition:width .2s;}
+  .stat-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:var(--sp-3);text-align:center;}
+  .stat-box{background:var(--paper);border:1px solid var(--line);border-radius:var(--radius-sm);padding:var(--sp-3);}
+  .stat-box .num{font-family:var(--font-mono);font-size:24px;font-weight:600;color:var(--board-dark);}
+  .stat-box .lab{font-size:11.5px;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;}
+
+  details{border:1px solid var(--line);border-radius:var(--radius);margin-bottom:var(--sp-3);background:var(--card);overflow:hidden;}
+  summary{
+    font-family:var(--font-display);font-weight:700;font-size:16.5px;
+    padding:var(--sp-4) var(--sp-5);cursor:pointer;list-style:none;
+    display:flex;align-items:center;justify-content:space-between;
+  }
+  summary::-webkit-details-marker{display:none;}
+  summary:after{content:'+';font-family:var(--font-mono);font-size:20px;color:var(--brass);transition:transform .15s;}
+  details[open] summary:after{transform:rotate(45deg);}
+  details[open] summary{border-bottom:1px solid var(--line);}
+  .details-body{padding:var(--sp-4) var(--sp-5) var(--sp-5);font-size:14.5px;}
+  .details-body p{margin-top:0;}
+  .details-body ol, .details-body ul{padding-left:20px;margin:var(--sp-2) 0;}
+  .details-body li{margin-bottom:6px;}
+  table{width:100%;border-collapse:collapse;font-size:13.5px;margin:var(--sp-2) 0;}
+  th{font-family:var(--font-mono);text-transform:uppercase;font-size:11px;letter-spacing:.03em;color:var(--ink-soft);text-align:left;padding:6px 8px;border-bottom:2px solid var(--ink);}
+  td{padding:8px;border-bottom:1px solid var(--line);vertical-align:top;}
+  td:first-child, th:first-child{font-family:var(--font-mono);white-space:nowrap;}
+
+  .erro-card{border:1px solid var(--line);border-left:4px solid var(--flag-red);border-radius:var(--radius-sm);padding:var(--sp-3) var(--sp-4);margin-bottom:var(--sp-3);background:var(--card);}
+  .erro-card.tipo-mistake{border-left-color:var(--amber);}
+  .erro-card.tipo-inaccuracy{border-left-color:var(--sage);}
+  .erro-top{display:flex;justify-content:space-between;align-items:center;gap:var(--sp-2);flex-wrap:wrap;margin-bottom:6px;}
+  .erro-date{font-family:var(--font-mono);font-size:13px;color:var(--ink-soft);}
+  .erro-move{font-family:var(--font-mono);font-weight:600;font-size:15px;}
+  .erro-field-label{font-size:11px;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft);margin-top:8px;}
+  .erro-field-val{font-size:14px;}
+
+  .import-drop{border:1.5px dashed var(--line);border-radius:var(--radius);padding:var(--sp-4);text-align:center;margin-bottom:var(--sp-3);transition:border-color .15s, background .15s;}
+  .import-drop.dragover{border-color:var(--brass);background:rgba(184,134,59,0.08);}
+  .import-error{color:var(--flag-red);font-size:13.5px;margin-top:var(--sp-2);display:none;}
+  .partida-block{margin-bottom:var(--sp-3);}
+  .partida-card{
+    display:flex;justify-content:space-between;align-items:center;gap:var(--sp-3);flex-wrap:wrap;
+    border:1px solid var(--line);border-radius:var(--radius-sm);padding:var(--sp-3) var(--sp-4);background:var(--card);
+  }
+  .partida-viewer-slot:not(:empty){margin-top:var(--sp-2);}
+  .partida-info .pi-players{font-weight:600;font-size:14.5px;}
+  .partida-info .pi-meta{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);margin-top:2px;}
+  .erro-mini-board{margin-top:12px;padding-top:12px;border-top:1px dashed var(--line);max-width:420px;}
+  .erro-mini-board .board{max-width:380px;margin:0 auto;}
+  .erro-mini-board .board-controls{justify-content:center;margin-top:8px;}
+  .erro-mini-board .move-status{text-align:center;font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);margin-top:6px;}
+
+  .viewer{display:grid;grid-template-columns:minmax(0,420px) 1fr;gap:var(--sp-5);margin-top:var(--sp-4);align-items:start;}
+  @media (max-width:720px){.viewer{grid-template-columns:1fr;}}
+  .viewer-side{display:flex;flex-direction:column;gap:var(--sp-4);min-width:0;}
+  .board-wrap{width:100%;}
+  .board{
+    display:grid;grid-template-columns:repeat(8,1fr);grid-template-rows:repeat(8,1fr);
+    aspect-ratio:1/1;width:100%;
+    box-shadow:0 3px 10px rgba(0,0,0,0.18);
+    border-radius:2px;overflow:hidden;
+  }
+  .sq{
+    position:relative;display:flex;align-items:center;justify-content:center;
+    line-height:1;user-select:none;
+  }
+  .sq.light{background:var(--sq-light);}
+  .sq.dark{background:var(--sq-dark);}
+  .sq.hl{background-image:linear-gradient(rgba(186,202,68,.65),rgba(186,202,68,.65));}
+  .sq.selected{background-image:linear-gradient(rgba(184,134,59,.55),rgba(184,134,59,.55));}
+  .sq.legal-move{cursor:pointer;}
+  .sq.legal-move::after{content:'';position:absolute;width:30%;height:30%;top:50%;left:50%;transform:translate(-50%,-50%);border-radius:50%;background:rgba(36,26,20,.32);pointer-events:none;}
+  .sq.legal-move.has-piece::after{width:86%;height:86%;background:transparent;border:4px solid rgba(36,26,20,.38);box-sizing:border-box;}
+  .board.interativo .sq.minha-peca{cursor:pointer;}
+
+  .eval-bar{position:relative;height:14px;border-radius:999px;background:#2b2b2b;overflow:hidden;border:1px solid var(--line);margin-top:10px;}
+  .eval-bar-fill{position:absolute;top:0;left:0;height:100%;background:#f2f0e8;transition:width .4s ease;}
+  .eval-bar-label{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);text-align:center;margin-top:4px;}
+
+  .promo-picker{display:flex;gap:8px;justify-content:center;margin-top:10px;}
+  .promo-picker button{width:44px;height:44px;padding:0;border-radius:var(--radius-sm);display:flex;align-items:center;justify-content:center;}
+  .promo-picker img{width:70%;height:70%;}
+
+  .motor-status{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);text-align:center;margin:8px 0;}
+  .feedback-banner{border-radius:var(--radius-sm);padding:10px 14px;margin:10px 0;font-size:14px;font-weight:600;text-align:center;}
+  .feedback-banner.certo{background:#E4EDE0;color:var(--sage);border:1px solid var(--sage);}
+  .feedback-banner.mediano{background:#FBF1DE;color:var(--brass-deep);border:1px solid var(--brass);}
+  .feedback-banner.errado{background:#F3E2DD;color:var(--flag-red);border:1px solid var(--flag-red);}
+
+  @keyframes entrarRevisao{ from{opacity:0;transform:translateY(7px);} to{opacity:1;transform:translateY(0);} }
+  .revisar-anim{animation:entrarRevisao .28s ease;}
+
+  .nav-ply{display:flex;align-items:center;justify-content:center;gap:10px;margin:10px 0;}
+  .nav-ply button{width:34px;height:34px;padding:0;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:16px;}
+  .nav-ply button:disabled{opacity:.3;cursor:default;}
+  .nav-ply .nav-ply-label{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);min-width:120px;text-align:center;}
+
+  .linha-toggle{display:flex;gap:6px;justify-content:center;margin:8px 0;}
+  .linha-toggle button{font-size:12px;padding:5px 10px;}
+  .linha-toggle button.ativa{background:var(--ink);color:var(--paper);}
+
+  .multipv-list{margin-top:10px;border-top:1px solid var(--line);padding-top:8px;}
+  .multipv-item{display:flex;gap:8px;font-size:13px;padding:3px 0;font-family:var(--font-mono);}
+  .multipv-item .mpv-eval{min-width:52px;font-weight:700;color:var(--ink-soft);}
+
+  .atalhos-hint{font-family:var(--font-mono);font-size:11px;color:var(--ink-soft);text-align:center;margin-top:10px;opacity:.75;}
+  .atalhos-hint kbd{background:var(--card);border:1px solid var(--line);border-radius:3px;padding:0 4px;font-family:var(--font-mono);}
+
+  .motor-config-details summary{font-size:12.5px;}
+  .analise-item{display:flex;align-items:center;gap:8px;padding:6px 0;border-bottom:1px solid var(--line);font-size:13px;flex-wrap:wrap;}
+  .analise-item:last-child{border-bottom:none;}
+  .analise-lista{margin-top:6px;}
+  .flag-motor{font-family:var(--font-mono);font-weight:700;font-size:11px;margin-left:3px;padding:0 3px;border-radius:3px;}
+  .flag-motor.tipo-blunder{color:var(--flag-red);}
+  .flag-motor.tipo-mistake{color:var(--brass-deep);}
+  .flag-motor.tipo-inaccuracy{color:var(--ink-soft);}
+  .flag-motor.tipo-miss{color:#6B4C7A;}
+  .flag-motor.tipo-brilliant{color:#1F7A72;}
+  .flag-motor.tipo-great{color:#2E6E9E;}
+  .motor-config-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(110px,1fr));gap:10px;margin-top:8px;}
+  .motor-config-grid label{font-size:11px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-soft);display:block;margin-bottom:3px;}
+  .motor-config-grid select{width:100%;}
+  @media (max-width:560px){ .motor-config-grid{grid-template-columns:1fr;} }
+  .piece-icon{width:76%;height:76%;display:block;filter:drop-shadow(0 1px 1.5px rgba(0,0,0,0.35));}
+  .piece-w .pc-body{fill:url(#gw);stroke:#3a3a3a;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
+  .piece-w .pc-detail{fill:#3a3a3a;stroke:#3a3a3a;}
+  .piece-b .pc-body{fill:url(#gb);stroke:#151515;stroke-width:1.6;stroke-linejoin:round;stroke-linecap:round;}
+  .piece-b .pc-detail{fill:#EDEDE4;stroke:#EDEDE4;}
+  .sq .coord{position:absolute;font-family:var(--font-mono);font-size:9px;font-weight:700;opacity:.7;line-height:1;}
+  .sq .coord-file{bottom:2px;right:3px;}
+  .sq .coord-rank{top:2px;left:3px;}
+  .board-controls{display:flex;justify-content:center;gap:var(--sp-2);margin-top:var(--sp-3);flex-wrap:wrap;}
+  .move-status{text-align:center;font-family:var(--font-mono);font-size:12.5px;color:var(--ink-soft);margin-top:var(--sp-2);min-height:16px;}
+
+  .movelist{max-height:340px;overflow-y:auto;border:1px solid var(--line);border-radius:var(--radius-sm);}
+  .move-row{display:grid;grid-template-columns:36px 1fr 1fr;font-family:var(--font-mono);font-size:13.5px;border-bottom:1px solid var(--line);}
+  .move-row:last-child{border-bottom:none;}
+  .move-num{padding:7px 6px;color:var(--ink-soft);}
+  .move-btn{background:none;border:none;text-align:left;padding:7px 8px;cursor:pointer;font-family:var(--font-mono);font-size:13.5px;color:var(--ink);border-left:1px solid var(--line);}
+  .move-btn:hover{background:var(--paper);}
+  .move-btn.current{background:var(--brass);color:#fff;font-weight:600;}
+  .move-btn .flag{color:var(--flag-red);margin-left:3px;}
+  .move-time{font-size:10.5px;color:var(--ink-soft);margin-left:5px;opacity:.75;}
+  .move-time-slow{color:var(--flag-red);font-weight:600;opacity:1;}
+  .quick-erro-panel{border-top:1px solid var(--line);padding-top:var(--sp-4);}
+  .viewer-side .quick-erro-panel:empty{border-top:none;padding-top:0;}
+
+  .toast{
+    position:fixed;bottom:20px;left:50%;transform:translateX(-50%);
+    background:var(--ink);color:var(--paper);padding:10px 18px;border-radius:999px;
+    font-size:13.5px;box-shadow:0 6px 18px var(--shadow);z-index:999;
+  }
+
+  footer{margin-top:var(--sp-7);padding-top:var(--sp-4);border-top:1px solid var(--line);
+    display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;gap:var(--sp-2);
+    font-size:12.5px;color:var(--ink-soft);}
+
+  .loading-overlay{position:fixed;inset:0;background:var(--paper);display:flex;align-items:center;justify-content:center;
+    font-family:var(--font-mono);color:var(--ink-soft);z-index:1000;}
+</style>
+</head>
+<body>
+
+<div id="loadingOverlay" class="loading-overlay">carregando caderno…</div>
+
+<div class="app">
+
+  <header class="app-header">
+    <div class="rank-strip" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+    <h1>Caderno de Xadrez</h1>
+    <p class="subtitle">Caderno de erros · revisão espaçada · análise com Stockfish</p>
+    <p class="stats-mini" id="statsMini">carregando estatísticas…</p>
+    <p class="stats-mini" style="margin-top:-6px;">
+      Seu nick no Chess.com/Lichess: <input type="text" id="meuNickInput" value="" placeholder="seu nick" style="width:140px;display:inline-block;margin:0 0 0 4px;padding:2px 6px;font-size:12px;">
+      <span style="opacity:.7;">(usado pra saber de que lado você jogou, sozinho)</span>
+    </p>
+    <p class="storage-status" id="storageStatus" style="display:none;"></p>
+    <div class="save-bar">
+      <span class="save-bar-group-label">Automático (Chrome/Edge):</span>
+      <button class="btn btn-primary btn-sm" id="fsOpenBtn">📂 Abrir meu arquivo</button>
+      <button class="btn btn-ghost btn-sm" id="fsCreateBtn">🆕 Criar arquivo novo</button>
+    </div>
+    <p class="storage-status bad" id="fsUnsupportedNote" style="display:none;">Esse navegador/ambiente não permite salvar automaticamente num arquivo — use as opções manuais abaixo.</p>
+    <div class="save-bar">
+      <span class="save-bar-group-label">Manual (qualquer navegador):</span>
+      <button class="btn btn-ghost btn-sm" id="saveFileBtn">💾 Salvar arquivo</button>
+      <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">
+        Carregar arquivo
+        <input type="file" id="loadFileInput" accept=".json" style="display:none;">
+      </label>
+    </div>
+    <span class="save-bar-info" id="saveBarInfo">nenhum arquivo conectado ainda</span>
+    <nav class="tabs" role="tablist">
+      <button class="tab-btn active" data-tab="hoje" role="tab">Hoje</button>
+      <button class="tab-btn" data-tab="plano" role="tab">Plano</button>
+      <button class="tab-btn" data-tab="erros" role="tab">Caderno de Erros</button>
+      <button class="tab-btn" data-tab="revisar" role="tab">Revisar</button>
+      <button class="tab-btn" data-tab="partidas" role="tab">Partidas</button>
+    </nav>
+  </header>
+
+  <main>
+
+    <section id="tab-hoje" class="tab-panel active">
+      <div class="today-focus">
+        <div class="day-label" id="hojeDayLabel">—</div>
+        <h2 id="hojeFocusTitle">—</h2>
+        <div class="progress-bar"><div class="progress-fill" id="hojeProgressFill" style="width:0%"></div></div>
+        <div id="hojeProgressText" style="font-family:var(--font-mono);font-size:12.5px;opacity:.85;">0 de 4 blocos concluídos</div>
+      </div>
+
+      <div class="card">
+        <h3>Rotina de hoje (2h+)</h3>
+        <div id="checklistWrap"></div>
+      </div>
+
+      <div class="card" id="tacticsWidgetCard" style="display:none;">
+        <h3>Tema tático de hoje</h3>
+        <div id="tacticsWidgetBody"></div>
+      </div>
+
+      <div class="card">
+        <h3>Seu progresso</h3>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="num" id="statPartidas">0</div><div class="lab">Partidas</div></div>
+          <div class="stat-box"><div class="num" id="statErros">0</div><div class="lab">Erros catalogados</div></div>
+          <div class="stat-box"><div class="num" id="statStreak">0</div><div class="lab">Dias de sequência</div></div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h3>Tendência de erros</h3>
+        <div id="errorTrendWrap"></div>
+      </div>
+    </section>
+
+    <section id="tab-plano" class="tab-panel">
+      <div class="card">
+        <h2>Plano de Estudo</h2>
+        <p class="lede">Referência completa — tática, finais, aberturas e metas. O dia a dia mora na aba Hoje; aqui fica o porquê.</p>
+        <p class="lede"><em>Este plano é um exemplo montado pelo autor (de ~667 a 1500+ de rating, com Caro-Kann de pretas e 1.e4 de brancas). Use como inspiração e adapte ao seu nível e repertório.</em></p>
+      </div>
+
+      <details open>
+        <summary>Pirâmide de prioridades</summary>
+        <div class="details-body">
+          <p>Em ordem de peso, até uns 1200-1400 de rating:</p>
+          <ol>
+            <li><strong>Segurança material</strong> — não deixar peças penduradas, não ignorar ameaças</li>
+            <li><strong>Táticas</strong> — reconhecer padrões de combinação</li>
+            <li><strong>Princípios de abertura</strong> — desenvolvimento, centro, segurança do rei</li>
+            <li><strong>Finais básicos</strong> — converter vantagens, defender posições difíceis</li>
+            <li><strong>Estratégia/planejamento</strong> — entra com mais peso só depois de ~1200</li>
+          </ol>
+        </div>
+      </details>
+
+      <details>
+        <summary>Roadmap por fases</summary>
+        <div class="details-body">
+          <table>
+            <tr><th>Fase</th><th>Rating</th><th>Duração</th><th>Foco</th></tr>
+            <tr><td>1 · Fundamentos</td><td>667→900</td><td>4-6 sem</td><td>Eliminar blunders, táticas de 1 lance, checklist mental</td></tr>
+            <tr><td>2 · Consolidação</td><td>900→1200</td><td>2-3 meses</td><td>Táticas de 2-3 lances, finais de peão/torre, repertório mais firme</td></tr>
+            <tr><td>3 · Refinamento</td><td>1200→1600</td><td>3-6 meses</td><td>Estratégia, finais complexos, análise profunda</td></tr>
+            <tr><td>4 · Especialização</td><td>1600+</td><td>contínuo</td><td>Teoria mais funda, partidas de mestres, torneios</td></tr>
+          </table>
+        </div>
+      </details>
+
+      <details>
+        <summary>Currículo de táticas</summary>
+        <div class="details-body">
+          <p>Um tema por vez, blocos de 15-20 puzzles até ficar confortável. A aba Hoje acompanha automaticamente em qual tema você está:</p>
+          <ol>
+            <li><a href="https://lichess.org/training/hangingPiece" target="_blank" rel="noopener">Peças penduradas</a></li>
+            <li><a href="https://lichess.org/training/mateIn1" target="_blank" rel="noopener">Mate em 1</a></li>
+            <li><a href="https://lichess.org/training/fork" target="_blank" rel="noopener">Garfo</a> — especialmente de cavalo</li>
+            <li><a href="https://lichess.org/training/pin" target="_blank" rel="noopener">Cravada</a> absoluta e relativa</li>
+            <li><a href="https://lichess.org/training/skewer" target="_blank" rel="noopener">Raio-X (skewer)</a></li>
+            <li><a href="https://lichess.org/training/discoveredAttack" target="_blank" rel="noopener">Ataque descoberto</a></li>
+            <li><a href="https://lichess.org/training/doubleCheck" target="_blank" rel="noopener">Xeque duplo</a></li>
+            <li><a href="https://lichess.org/training/deflection" target="_blank" rel="noopener">Deflexão / sobrecarga</a></li>
+            <li><a href="https://lichess.org/training/attraction" target="_blank" rel="noopener">Atração (decoy)</a></li>
+            <li><a href="https://lichess.org/training/kingsideAttack" target="_blank" rel="noopener">Ataque ao rei</a> — padrões tipo Bxh7+, Nxf7</li>
+            <li><a href="https://lichess.org/training/backRankMate" target="_blank" rel="noopener">Mate no corredor</a></li>
+            <li><a href="https://lichess.org/training/anastasiaMate" target="_blank" rel="noopener">Padrões de mate</a> (Anastasia, depois árabe e sufocado)</li>
+          </ol>
+          <p style="font-size:13px;color:var(--ink-soft);">Por que nessa ordem e não embaralhado? Pra cada padrão novo, prática em bloco (o mesmo tema repetido) fixa o reconhecimento mais rápido do que pular de tema em tema. A mistura entra de propósito na quinta-feira, depois que você já viu os temas — aí sim embaralhar ajuda a treinar reconhecer qual padrão é qual.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Currículo de finais</summary>
+        <div class="details-body">
+          <p><strong>Fase 1:</strong></p>
+          <ul>
+            <li>Rei + peão vs Rei — regra do quadrado, oposição, peão passado</li>
+            <li>Rei + 2 peões vs Rei</li>
+            <li>Zugzwang básico</li>
+          </ul>
+          <p><strong>Fase 2:</strong></p>
+          <ul>
+            <li>Final de torre: Lucena e Philidor</li>
+            <li>Rei ativo em final</li>
+            <li>Cavalo vs peões / Bispo vs peões</li>
+          </ul>
+          <p>Use a aba <strong>Practice</strong> do Lichess — finais interativos contra o motor.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Repertório — Caro-Kann (pretas)</summary>
+        <div class="details-body">
+          <table>
+            <tr><th>Linha branca</th><th>Ideia das pretas</th></tr>
+            <tr><td>3.e5 (Avanço)</td><td>...Bf5 antes de ...e6; atacar e5 com ...c5 depois</td></tr>
+            <tr><td>3.exd5 (Troca)</td><td>Estrutura simétrica, desenvolvimento natural, ...Bd6</td></tr>
+            <tr><td>3.Nc3/3.Nd2 (Principal)</td><td>...dxe4, depois ...Bf5/...Bg4 antes de fechar com ...e6</td></tr>
+            <tr><td>2.d4 d5 3.exd5 cxd5 4.c4 (Panov)</td><td>Jogar como Dama Recusada; atenção ao peão isolado</td></tr>
+          </table>
+          <p>Não decore variantes — entenda a ideia: tirar o bispo de casas claras <em>antes</em> de ...e6.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Repertório — 1.e4 (brancas)</summary>
+        <div class="details-body">
+          <table>
+            <tr><th>Resposta preta</th><th>Linha sugerida</th><th>Por quê</th></tr>
+            <tr><td>1...e5</td><td>Escocesa (2.Nf3 Nc6 3.d4)</td><td>Abre o centro logo, gera posições diretas e táticas</td></tr>
+            <tr><td>1...c5</td><td>Fechada (2.Nc3) ou Alapin (2.c3)</td><td>Evita a teoria pesada da Aberta</td></tr>
+            <tr><td>1...e6</td><td>Avanço (3.e5) ou Troca (3.exd5)</td><td>Planos claros, menos memorização</td></tr>
+            <tr><td>1...d5</td><td>2.exd5 Qxd5 3.Nc3</td><td>Ganha tempo de desenvolvimento</td></tr>
+            <tr><td>1...d6/g6</td><td>Desenvolvimento clássico no centro</td><td>Você já entende essas estruturas pelo Caro-Kann</td></tr>
+          </table>
+        </div>
+      </details>
+
+      <details>
+        <summary>Processo de análise pós-partida</summary>
+        <div class="details-body">
+          <ol>
+            <li>Exporte o PGN do Chess.com (ou use a aba Partidas aqui do caderno)</li>
+            <li>Primeiro, percorra sem motor — tente achar sozinho onde teve dificuldade</li>
+            <li>Depois, ative o Stockfish local do Lichess e ache o "momento crítico"</li>
+            <li>Classifique: Blunder / Mistake / Inaccuracy</li>
+            <li>Anote na aba Caderno de Erros</li>
+            <li>Todo domingo, releia os erros da semana e procure padrões</li>
+          </ol>
+        </div>
+      </details>
+
+      <details>
+        <summary>Metas de rating</summary>
+        <div class="details-body">
+          <table>
+            <tr><th>Marco</th><th>Tempo estimado</th><th>O que muda</th></tr>
+            <tr><td>667 → 800</td><td>3-5 semanas</td><td>Para de deixar peças penduradas na maioria das partidas</td></tr>
+            <tr><td>800 → 1000</td><td>6-10 semanas</td><td>Táticas de 2-3 lances viram naturais</td></tr>
+            <tr><td>1000 → 1200</td><td>2-3 meses</td><td>Finais básicos dominados, repertório mais sólido</td></tr>
+            <tr><td>1200 → 1500</td><td>4-6 meses</td><td>Joga com plano, não só reagindo</td></tr>
+          </table>
+          <p>Estimativas — processo consistente importa mais que o número.</p>
+        </div>
+      </details>
+
+      <details>
+        <summary>Checklist mental (antes de cada lance)</summary>
+        <div class="details-body">
+          <ul>
+            <li>Alguma peça minha está pendurada?</li>
+            <li>Meu lance deixa alguma peça pendurada?</li>
+            <li>O que o adversário está ameaçando?</li>
+            <li>Existe xeque, captura ou ataque (CCA) que eu não considerei?</li>
+          </ul>
+        </div>
+      </details>
+
+      <details>
+        <summary>Erros comuns a evitar</summary>
+        <div class="details-body">
+          <ul>
+            <li>Jogar bullet/blitz esperando isso melhorar sua tática</li>
+            <li>Decorar variantes de abertura em vez dos princípios</li>
+            <li>Jogar e não analisar depois</li>
+            <li>Usar o motor antes de tentar entender sozinho</li>
+            <li>Estudar demais e jogar de menos</li>
+          </ul>
+        </div>
+      </details>
+
+      <details>
+        <summary>Recursos complementares</summary>
+        <div class="details-body">
+          <ul>
+            <li><strong>Livro:</strong> Logical Chess: Move by Move (Irving Chernev)</li>
+            <li><strong>Livro:</strong> Bobby Fischer Teaches Chess</li>
+            <li><strong>Canal:</strong> GothamChess (Levy Rozman)</li>
+            <li><strong>Canal:</strong> Daniel Naroditsky — séries de speedrun</li>
+            <li>O Lichess sozinho já cobre puzzles, finais e análise, de graça</li>
+          </ul>
+        </div>
+      </details>
+    </section>
+
+    <section id="tab-erros" class="tab-panel">
+      <div class="card">
+        <h2>Caderno de Erros</h2>
+        <p class="lede">Revise essa lista todo domingo. Pra registrar a partir de uma partida, use a aba Partidas — aqui é só pra notas soltas.</p>
+
+        <details id="erroFormDetails">
+          <summary>Adicionar erro manual (sem partida vinculada)</summary>
+          <div class="details-body">
+            <form id="erroForm">
+              <input type="hidden" id="erroId">
+              <input type="hidden" id="erroRitmoHidden">
+              <input type="hidden" id="erroResultadoHidden">
+              <label for="erroData">Data</label>
+              <input type="date" id="erroData" required>
+              <label for="erroTipo">Tipo de erro</label>
+              <select id="erroTipo">
+                <option value="blunder">Blunder</option>
+                <option value="mistake">Erro (Mistake)</option>
+                <option value="inaccuracy">Imprecisão (Inaccuracy)</option>
+                <option value="miss">Miss</option>
+              </select>
+              <label for="erroLance">Lance do erro</label>
+              <input type="text" id="erroLance" placeholder="ex: 14...Bxh2??">
+              <label for="erroMotivo">O que eu devia ter pensado</label>
+              <textarea id="erroMotivo" placeholder="descreva o raciocínio que faltou nesse momento"></textarea>
+              <label for="erroPadrao">É um padrão que já se repetiu?</label>
+              <textarea id="erroPadrao" placeholder="ex: terceira vez que esqueço um cavalo cravado"></textarea>
+              <p id="erroContexto" style="font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);display:none;"></p>
+              <div class="btn-row">
+                <button type="submit" class="btn btn-primary" id="erroSubmitBtn">Adicionar ao caderno</button>
+                <button type="button" class="btn btn-ghost" id="erroCancelBtn" style="display:none;">Cancelar</button>
+              </div>
+            </form>
+          </div>
+        </details>
+      </div>
+
+      <div class="card">
+        <div class="field-row">
+          <div>
+            <label for="erroFiltroTexto">Buscar</label>
+            <input type="text" id="erroFiltroTexto" placeholder="busca em lance, motivo ou padrão...">
+          </div>
+          <div>
+            <label for="erroFiltroTipo">Tipo</label>
+            <select id="erroFiltroTipo">
+              <option value="">Todos</option>
+              <option value="blunder">Blunder</option>
+              <option value="mistake">Erro (Mistake)</option>
+              <option value="inaccuracy">Imprecisão</option>
+              <option value="miss">Miss</option>
+            </select>
+          </div>
+        </div>
+        <label for="erroFiltroPeriodo">Período</label>
+        <select id="erroFiltroPeriodo">
+          <option value="">Todos</option>
+          <option value="7">Últimos 7 dias</option>
+          <option value="30">Últimos 30 dias</option>
+        </select>
+        <label for="erroFiltroPartida">Partida</label>
+        <select id="erroFiltroPartida">
+          <option value="">Todas as partidas</option>
+        </select>
+      </div>
+
+      <div id="errosListWrap"></div>
+    </section>
+
+    <section id="tab-revisar" class="tab-panel">
+      <div class="card">
+        <h2>Revisão espaçada</h2>
+        <p class="lede">Resolva de novo as posições exatas onde você já errou. Com tabuleiro, o motor confirma se o seu lance está bom; sem tabuleiro, você se auto-avalia. Acerte <strong>3 vezes seguidas</strong> pra tirar um erro da fila — se errar de novo, ele volta com o contador zerado.</p>
+        <div class="stat-grid">
+          <div class="stat-box"><div class="num" id="revPendentes">0</div><div class="lab">Pendentes</div></div>
+          <div class="stat-box"><div class="num" id="revDominados">0</div><div class="lab">Dominados</div></div>
+          <div class="stat-box"><div class="num" id="revHoje">0</div><div class="lab">Revisado hoje</div></div>
+        </div>
+        <details class="motor-config-details">
+          <summary>Config do motor (Stockfish)</summary>
+          <div class="details-body">
+            <div class="motor-config-grid">
+              <div>
+                <label for="cfgMultiPv">Linhas mostradas</label>
+                <select id="cfgMultiPv">
+                  <option value="1">1</option>
+                  <option value="2">2</option>
+                  <option value="3">3</option>
+                  <option value="4">4</option>
+                  <option value="5">5</option>
+                </select>
+              </div>
+              <div>
+                <label for="cfgMovetime">Tempo de busca</label>
+                <select id="cfgMovetime">
+                  <option value="500">0.5s</option>
+                  <option value="1000">1s</option>
+                  <option value="1200">1.2s</option>
+                  <option value="2000">2s</option>
+                  <option value="3000">3s</option>
+                  <option value="5000">5s</option>
+                </select>
+              </div>
+              <div>
+                <label for="cfgHash">Memória (hash)</label>
+                <select id="cfgHash">
+                  <option value="16">16 MB</option>
+                  <option value="32">32 MB</option>
+                  <option value="64">64 MB</option>
+                  <option value="128">128 MB</option>
+                </select>
+              </div>
+              <div>
+                <label for="cfgDepthAnalise">Profundidade (análise de partida)</label>
+                <select id="cfgDepthAnalise">
+                  <option value="14">14</option>
+                  <option value="16">16</option>
+                  <option value="18">18</option>
+                  <option value="20" selected>20</option>
+                  <option value="22">22</option>
+                  <option value="25">25</option>
+                </select>
+              </div>
+            </div>
+            <p class="ci-sub" style="margin-top:8px;">Mais linhas e mais tempo deixam a análise mais completa, mas demoram mais por posição. As linhas extras só aparecem depois que você já jogou o seu lance — não tem spoiler antes disso. A análise de partida inteira usa profundidade fixa (não tempo) de propósito: dá o mesmo resultado sempre que você reanalisar a mesma partida — profundidade maior demora mais, principalmente em posições complicadas.</p>
+          </div>
+        </details>
+      </div>
+      <div id="revisarWrap"></div>
+    </section>
+
+    <section id="tab-partidas" class="tab-panel">
+      <div class="card">
+        <h2>Partidas</h2>
+        <p class="lede">Cole o PGN de uma partida do Chess.com (ou arraste o arquivo .pgn pra cá) pra reviver e marcar erros direto no tabuleiro. Colar já importa sozinho.</p>
+        <div class="import-drop" id="importDropZone">
+          <textarea id="pgnPaste" placeholder="Cole aqui o PGN da partida (ou de várias, coladas em sequência)... colar já importa automático" style="min-height:110px;"></textarea>
+          <div class="btn-row">
+            <button class="btn btn-primary" id="importBtn">Importar partida(s)</button>
+            <label class="btn btn-ghost" style="cursor:pointer;">
+              Enviar arquivo .pgn
+              <input type="file" id="pgnFile" accept=".pgn,.txt" style="display:none;">
+            </label>
+          </div>
+          <p class="import-error" id="importError"></p>
+        </div>
+      </div>
+
+      <div id="partidasListWrap"></div>
+    </section>
+
+  </main>
+
+  <footer>
+    <span>Feito pra sua evolução no xadrez · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
+  </footer>
+
+</div>
+
+<div id="toast" class="toast" hidden></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script type="module" src="js/main.js"></script>
+</body>
+</html>
