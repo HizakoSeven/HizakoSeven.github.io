@@ -1,6 +1,6 @@
 /* Classificacao de lances (blunder/erro/imprecisao/brilhante/miss) e analise completa de partida. */
 import { fenToBoard } from './board.js';
-import { avaliarFEN, engineState, engineWorker, iniciarMotor } from './engine.js';
+import { avaliarFEN, engineState, iniciarMotor, interromperBuscaSegundoPlano, reiniciarHashMotor } from './engine.js';
 import { renderAnaliseMotorUI, renderMovelist } from './partidas.js';
 import { persist } from './persistence.js';
 import { ENGINE_PERDA_ACEITAVEL } from './revisao.js';
@@ -26,7 +26,10 @@ export function mapClasseParaTipo(classe){
 }
 
 export function cancelarAnaliseCompleta(){
-  if(state.analiseEmAndamento) state.analiseEmAndamento.cancelado = true;
+  if(state.analiseEmAndamento){
+    state.analiseEmAndamento.cancelado = true;
+    interromperBuscaSegundoPlano(); /* nao espera a posicao atual terminar a busca */
+  }
 }
 
 export function derivarClassificacoesPorPly(todasLinhas, applied, porPlyExistente, fens){
@@ -87,30 +90,34 @@ export async function iniciarAnaliseCompleta(game, opcoes){
     renderAnaliseMotorUI(game);
     return;
   }
-  engineWorker.postMessage('ucinewgame'); /* zera o hash: cada analise completa parte do mesmo estado */
+  reiniciarHashMotor(); /* zera o hash antes da 1a busca: cada analise completa parte do mesmo estado */
 
   var todasLinhas = new Array(total);
   var depthAnalise = opcoes.depth || state.motorConfig.depthAnalise || 20;
   var multiPvAnalise = Math.max(2, state.motorConfig.multiPv || 1); /* Great precisa comparar a 1a com a 2a linha */
 
+  var motorCaiu = false;
+
   function avaliarIndice(idx){
     return new Promise(function(resolve){
       avaliarFEN(game.fens[idx], function(res){
+        if(res && res.falhou){ motorCaiu = true; resolve(); return; }
+        if(res && res.parcial){ resolve(); return; } /* busca interrompida (cancelar): resultado raso, descarta */
         var linhas = (res && res.linhas) || [];
         todasLinhas[idx] = linhas.length ? linhas : [{cp:0, mate:null, pv:[]}];
         state.analiseEmAndamento.atual = idx+1;
         renderAnaliseMotorUI(game);
         resolve();
-      }, { depth: depthAnalise, multiPv: multiPvAnalise });
+      }, { depth: depthAnalise, multiPv: multiPvAnalise, segundoPlano: true });
     });
   }
 
   for(var i=0;i<total;i++){
-    if(state.analiseEmAndamento.cancelado) break;
+    if(state.analiseEmAndamento.cancelado || motorCaiu) break;
     await avaliarIndice(i);
   }
 
-  var completo = !state.analiseEmAndamento.cancelado;
+  var completo = !state.analiseEmAndamento.cancelado && !motorCaiu;
   var porPlyExistente = (game.analiseMotor && game.analiseMotor.porPly) || {};
   var porPly = derivarClassificacoesPorPly(todasLinhas, game.applied, porPlyExistente, game.fens);
   game.analiseMotor = { porPly: porPly, feitoEm: Date.now(), completo: completo, depthUsado: depthAnalise };
@@ -119,7 +126,9 @@ export async function iniciarAnaliseCompleta(game, opcoes){
   renderAnaliseMotorUI(game);
   renderMovelist(game);
   renderPainelTempo(game);
-  showToast(completo ? 'Análise completa!' : 'Análise cancelada — o que já tinha sido calculado foi mantido.');
+  showToast(completo ? 'Análise completa!' : (motorCaiu
+    ? 'O motor parou de responder — o que já tinha sido calculado foi mantido.'
+    : 'Análise cancelada — o que já tinha sido calculado foi mantido.'));
 }
 
 export function normalizarAvaliacao(info, inverterPerspectiva){

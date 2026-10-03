@@ -1,4 +1,19 @@
-/* Integracao com o motor Stockfish (Web Worker / UCI) + cache de avaliacoes por FEN. */
+/* Integracao com o motor Stockfish (Web Worker / UCI) + cache de avaliacoes por FEN.
+
+   Como as buscas sao organizadas (corrige a "corrida no motor"):
+   - Existe UM worker e UMA busca por vez (`emBusca`). Um pedido novo nunca e
+     enviado ao motor enquanto a busca anterior nao terminou, entao cada
+     `bestmove` recebido pertence, sem ambiguidade, ao pedido que esta em `emBusca`.
+   - Pedidos "interativos" (revisao, navegacao) substituem outros interativos:
+     o mais antigo e descartado (o callback dele NAO e chamado) e, se ja estiver
+     rodando, recebe `stop`. Quem chama ja ignora respostas velhas (ex.: revisao
+     confere state.revisao.atualId).
+   - Pedidos `segundoPlano:true` (analise completa de partida) nunca sao
+     descartados: entram no fim da fila, interativos furam a frente deles, e o
+     callback sempre e chamado - com `falhou:true` se o motor cair, ou
+     `parcial:true` se a busca foi interrompida (resultado raso, nao vai pro cache).
+   - Um watchdog manda `stop` se a busca passar muito do tempo e, se mesmo assim
+     nao vier resposta, marca o motor como falho em vez de travar pra sempre. */
 import { renderRevisar } from './revisao.js';
 import { state } from './state.js';
 
@@ -10,13 +25,17 @@ export var engineState = 'nao-iniciado'; /* nao-iniciado | carregando | pronto |
 
 export var engineFilaPronto = [];
 
-export var engineCallbackAtivo = null;
-
 export var engineInfoPorLinha = {};
 
 export var engineMultiPvAplicado = 1;
 
 export var engineHashAplicado = 16;
+
+var emBusca = null;          /* pedido que o motor esta executando agora */
+var fila = [];               /* pedidos esperando (interativos primeiro, depois segundo plano) */
+var novoJogoPendente = false;
+var watchdogTimer = null;
+var watchdogStopTimer = null;
 
 export function iniciarMotor(){
   if(engineState==='pronto' || engineState==='carregando') return;
@@ -24,43 +43,106 @@ export function iniciarMotor(){
   try{
     engineWorker = new Worker(ENGINE_JS_PATH);
   }catch(e){
-    engineState = 'falhou';
-    renderRevisar();
+    motorFalhou();
     return;
   }
+  var meuWorker = engineWorker;
   engineWorker.onmessage = function(ev){
+    if(meuWorker!==engineWorker) return; /* mensagem de um worker antigo, ja descartado */
     var linha = typeof ev.data === 'string' ? ev.data : (ev.data && ev.data.toString) ? ev.data.toString() : '';
     if(!linha) return;
     if(linha==='uciok'){ engineWorker.postMessage('isready'); return; }
     if(linha==='readyok'){
-      engineState = 'pronto';
-      var fila = engineFilaPronto; engineFilaPronto = [];
-      fila.forEach(function(fn){ fn(); });
+      if(engineState!=='pronto'){
+        engineState = 'pronto';
+        var prontos = engineFilaPronto; engineFilaPronto = [];
+        prontos.forEach(function(fn){ fn(); });
+      }
+      despachar();
       return;
     }
     if(linha.indexOf('info ')===0 && linha.indexOf(' pv ')!==-1){
+      if(!emBusca || emBusca.descartado) return;
+      /* linhas "lowerbound/upperbound" sao tentativas de janela, nao a avaliacao final */
+      if(/\b(lowerbound|upperbound)\b/.test(linha)) return;
       var infoParsed = parseInfoUCI(linha);
       engineInfoPorLinha[infoParsed.multipv] = infoParsed;
       return;
     }
     if(linha.indexOf('bestmove')===0){
-      var partes = linha.split(' ');
-      var cb = engineCallbackAtivo; engineCallbackAtivo = null;
-      var linhas = [];
-      for(var k=1;k<=(engineMultiPvRequisitado||1);k++){
-        if(engineInfoPorLinha[k]) linhas.push(engineInfoPorLinha[k]);
+      var req = emBusca; emBusca = null;
+      limparWatchdog();
+      if(req && !req.descartado){
+        var partes = linha.split(' ');
+        var linhas = [];
+        for(var k=1;k<=req.multiPv;k++){
+          if(engineInfoPorLinha[k]) linhas.push(engineInfoPorLinha[k]);
+        }
+        if(linhas.length===0 && engineInfoPorLinha[1]) linhas.push(engineInfoPorLinha[1]);
+        var res = { linhas: linhas, bestmove: (partes[1]==='(none)'?null:partes[1]) };
+        if(req.parcial){
+          res.parcial = true; /* interrompida: resultado raso, nao vai pro cache */
+        } else {
+          guardarNoCache(req.chave, res);
+        }
+        chamarCallback(req, res);
       }
-      if(linhas.length===0 && engineInfoPorLinha[1]) linhas.push(engineInfoPorLinha[1]);
-      if(cb) cb({ linhas: linhas, bestmove: (partes[1]==='(none)'?null:partes[1]) });
+      despachar();
       return;
     }
   };
   engineWorker.onerror = function(){
-    engineState = 'falhou';
-    engineFilaPronto = [];
-    renderRevisar();
+    if(meuWorker!==engineWorker) return;
+    motorFalhou();
   };
   engineWorker.postMessage('uci');
+}
+
+function chamarCallback(req, res){
+  try{ req.cb(res); }
+  catch(e){ setTimeout(function(){ throw e; }, 0); } /* nao deixa um erro do chamador travar a fila, mas ainda aparece no banner de erro */
+}
+
+function limparWatchdog(){
+  clearTimeout(watchdogTimer);
+  clearTimeout(watchdogStopTimer);
+  watchdogTimer = null;
+  watchdogStopTimer = null;
+}
+
+function armarWatchdog(req){
+  limparWatchdog();
+  var limite = req.profundidade ? 90000 : ((req.movetime||1200) + 8000);
+  watchdogTimer = setTimeout(function(){
+    if(emBusca!==req) return;
+    req.parcial = true;
+    try{ engineWorker.postMessage('stop'); }catch(e){}
+    watchdogStopTimer = setTimeout(function(){
+      if(emBusca===req) motorFalhou(); /* nem o stop foi atendido: motor travado */
+    }, 5000);
+  }, limite);
+}
+
+/* O motor caiu (ou nao carregou): encerra o worker e responde a todo mundo que estava esperando,
+   pra nada ficar pendurado. Pedidos interativos nao recebem callback (a tela cai pro modo simples
+   via renderRevisar); os de segundo plano recebem { falhou:true }. */
+function motorFalhou(){
+  engineState = 'falhou';
+  limparWatchdog();
+  var w = engineWorker;
+  engineWorker = null;
+  try{ if(w) w.terminate(); }catch(e){}
+  var afetados = [];
+  if(emBusca) afetados.push(emBusca);
+  afetados = afetados.concat(fila);
+  emBusca = null;
+  fila = [];
+  engineFilaPronto = [];
+  afetados.forEach(function(r){
+    if(r.descartado) return;
+    if(r.segundoPlano) chamarCallback(r, { linhas: [], bestmove: null, falhou: true });
+  });
+  renderRevisar();
 }
 
 export function quandoMotorPronto(fn){
@@ -79,6 +161,45 @@ export function garantirOpcoesMotor(multiPvDesejado){
   if(hashDesejado!==engineHashAplicado){
     engineWorker.postMessage('setoption name Hash value '+hashDesejado);
     engineHashAplicado = hashDesejado;
+  }
+}
+
+/* Envia ao motor o proximo pedido da fila, se ele estiver livre e pronto. */
+function despachar(){
+  if(emBusca || engineState!=='pronto' || !engineWorker) return;
+  while(fila.length){
+    var req = fila.shift();
+    if(req.descartado) continue;
+    emBusca = req;
+    engineInfoPorLinha = {};
+    if(novoJogoPendente){
+      engineWorker.postMessage('ucinewgame');
+      novoJogoPendente = false;
+    }
+    garantirOpcoesMotor(req.multiPv);
+    engineWorker.postMessage('position fen '+req.fen);
+    if(req.profundidade){
+      engineWorker.postMessage('go depth '+req.profundidade);
+    } else {
+      engineWorker.postMessage('go movetime '+req.movetime);
+    }
+    armarWatchdog(req);
+    return;
+  }
+}
+
+/* Pede ao motor pra zerar o hash antes da proxima busca (usado no inicio de uma analise completa).
+   Fica pendente se houver busca em andamento - nunca e enviado no meio de uma. */
+export function reiniciarHashMotor(){
+  novoJogoPendente = true;
+}
+
+/* Interrompe a busca de segundo plano em andamento (botao "Cancelar" da analise).
+   O resultado volta com parcial:true. */
+export function interromperBuscaSegundoPlano(){
+  if(emBusca && emBusca.segundoPlano && !emBusca.descartado){
+    emBusca.parcial = true;
+    try{ engineWorker.postMessage('stop'); }catch(e){}
   }
 }
 
@@ -114,18 +235,15 @@ export function detectarPosicaoTerminal(fen){
   return null;
 }
 
-export var engineReqId = 0;
-
-export var engineMultiPvRequisitado = 1;
-
 /* ---------- Cache de avaliacoes por FEN ----------
    A mesma posicao volta a aparecer com frequencia (revisao espacada
    reabre o mesmo erro varias vezes; navegar pra tras/frente numa
    partida ja analisada tambem repete FEN). Guardamos o resultado do
    motor por FEN + parametros (multiPV e profundidade/movetime, que
    mudam a qualidade da resposta) pra nao esperar o motor de novo.
-   Tamanho limitado (LRU simples via ordem de insercao do Map) pra
-   nao crescer sem fim numa sessao longa. */
+   Tamanho limitado (LRU: a leitura reinsere a entrada como mais recente)
+   pra nao crescer sem fim numa sessao longa.
+   Resultados interrompidos (parcial) nunca entram aqui. */
 var CACHE_MAX_ENTRADAS = 500;
 var engineCache = new Map();
 
@@ -146,6 +264,9 @@ export function limparCacheMotor(){
   engineCache.clear();
 }
 
+/* opcoes: { depth, movetimeMs, multiPv, segundoPlano }
+   O callback recebe { linhas, bestmove } (mais terminal:true em posicao final,
+   parcial:true se interrompido, falhou:true se o motor caiu - esses dois ultimos so em segundoPlano). */
 export function avaliarFEN(fen, onResultado, opcoes){
   var infoTerminal = detectarPosicaoTerminal(fen);
   if(infoTerminal){
@@ -160,6 +281,7 @@ export function avaliarFEN(fen, onResultado, opcoes){
   var chave = chaveCache(fen, multiPv, profundidade, movetime);
   var emCache = engineCache.get(chave);
   if(emCache){
+    guardarNoCache(chave, emCache); /* marca como recente */
     /* mesma FEN + mesmos parametros ja avaliados antes: devolve sem
        reconsultar o motor. Ainda assim assincrono (microtask), pra
        manter o mesmo contrato de "sempre chama onResultado depois",
@@ -168,23 +290,27 @@ export function avaliarFEN(fen, onResultado, opcoes){
     return;
   }
 
-  engineReqId++;
-  var meuId = engineReqId;
-  engineInfoPorLinha = {};
-  engineCallbackAtivo = function(res){
-    if(meuId!==engineReqId) return;
-    guardarNoCache(chave, res);
-    onResultado(res);
+  var req = {
+    fen: fen, multiPv: multiPv, profundidade: profundidade, movetime: movetime, chave: chave,
+    cb: onResultado, segundoPlano: !!opcoes.segundoPlano, descartado: false, parcial: false
   };
-  quandoMotorPronto(function(){
-    if(meuId!==engineReqId) return;
-    engineMultiPvRequisitado = multiPv;
-    garantirOpcoesMotor(multiPv);
-    engineWorker.postMessage('position fen '+fen);
-    if(profundidade){
-      engineWorker.postMessage('go depth '+profundidade);
-    } else {
-      engineWorker.postMessage('go movetime '+movetime);
+
+  if(req.segundoPlano){
+    fila.push(req);
+  } else {
+    /* um pedido interativo novo torna obsoletos os interativos anteriores */
+    fila = fila.filter(function(r){
+      if(r.segundoPlano) return true;
+      r.descartado = true;
+      return false;
+    });
+    fila.unshift(req); /* fura a frente dos de segundo plano */
+    if(emBusca && !emBusca.segundoPlano && !emBusca.descartado){
+      emBusca.descartado = true;
+      try{ engineWorker.postMessage('stop'); }catch(e){} /* acelera o fim; o bestmove dela e ignorado */
     }
-  });
+  }
+
+  iniciarMotor();
+  despachar();
 }
