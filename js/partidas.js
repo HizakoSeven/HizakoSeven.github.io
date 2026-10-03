@@ -181,14 +181,15 @@ export async function registrarErroDireto(game, ply){
     vezesRevisado: 0,
     ultimaRevisaoEm: null
   });
-  await persist();
+  /* atualiza a tela NA HORA (otimista) e so depois grava; a gravacao pode demorar */
   showToast('Erro registrado: '+label+'.');
+  renderAnaliseMotorUI(game);
+  renderMovelist(game);
+  renderQuickErroPanel(game);
   renderErros();
   renderHeaderStats();
   renderHoje();
-  renderMovelist(game);
-  renderAnaliseMotorUI(game);
-  renderQuickErroPanel(game);
+  await persist();
   return true;
 }
 
@@ -287,7 +288,9 @@ export function renderAnaliseMotorUI(game){
   });
   el.querySelectorAll('[data-registrar-ply]').forEach(function(btn){
     btn.addEventListener('click', function(){
+      if(btn.disabled) return;
       btn.disabled = true;
+      btn.textContent = '✓ registrado';
       registrarErroDireto(game, parseInt(btn.dataset.registrarPly,10));
     });
   });
