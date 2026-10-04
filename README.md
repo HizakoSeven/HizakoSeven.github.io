@@ -21,6 +21,3 @@ pieces/      SVGs das peças (wP.svg, bN.svg, ...)
 
 ## Créditos e licenças
 - Motor: [Stockfish](https://stockfishchess.org/) — GPLv3 (código-fonte em https://github.com/official-stockfish/Stockfish).
-- Regras de xadrez: [chess.js](https://github.com/jhlywa/chess.js) (BSD-2).
-- Peças SVG: indique aqui o autor e a licença do conjunto que você usa.
-- Código deste projeto: defina a licença que preferir (ex.: GPLv3, por conter o Stockfish).
