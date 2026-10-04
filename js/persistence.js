@@ -167,7 +167,8 @@ export function currentAppStateBlob(){
     checklistByDate: state.checklistByDate,
     tacticsProgress: state.tacticsProgress,
     meuNick: state.meuNick,
-    motorConfig: state.motorConfig
+    motorConfig: state.motorConfig,
+    sync: state.sync
   };
 }
 
@@ -245,6 +246,7 @@ document.getElementById('loadFileInput').addEventListener('change', function(e){
       renderRevisar();
       renderPartidas();
       document.getElementById('saveBarInfo').textContent = 'backup carregado agora';
+      document.dispatchEvent(new CustomEvent('caderno:estado-carregado'));
       showToast('Caderno carregado: '+state.erros.length+' erros, '+state.partidas.length+' partidas.');
     }catch(err){
       showToast('Não consegui ler esse backup — confira se é o .json baixado por aqui.');
@@ -289,5 +291,28 @@ export function applyStateBlob(blob){
     state.motorConfig.movetimeAnaliseMs = blob.motorConfig.movetimeAnaliseMs || state.motorConfig.movetimeAnaliseMs;
     state.motorConfig.depthAnalise = blob.motorConfig.depthAnalise || state.motorConfig.depthAnalise;
   }
+  mesclarSync(blob.sync);
   backfillMeuLado();
+}
+
+/* Backup antigo (sem `sync`): fica o padrao. Com `sync`: mescla campo a campo, validando o tipo de cada um. */
+function mesclarSync(b){
+  if(!b || typeof b!=='object') return;
+  var s = state.sync;
+  if(typeof b.auto==='boolean') s.auto = b.auto;
+  if(typeof b.ultimaSyncEm==='number' || b.ultimaSyncEm===null) s.ultimaSyncEm = b.ultimaSyncEm;
+  if(b.ultimoResumo && typeof b.ultimoResumo==='object') s.ultimoResumo = b.ultimoResumo;
+  if(typeof b.primeiraConcluida==='boolean') s.primeiraConcluida = b.primeiraConcluida;
+  if(b.filtros && typeof b.filtros==='object'){
+    if(Array.isArray(b.filtros.modalidades)){
+      s.filtros.modalidades = b.filtros.modalidades.filter(function(m){ return ['rapid','blitz','bullet','daily'].indexOf(m)!==-1; });
+    }
+    var p = b.filtros.periodoInicialDias;
+    if(p==='tudo' || [7,30,90].indexOf(p)!==-1) s.filtros.periodoInicialDias = p;
+  }
+  if(b.filtrosAplicados && typeof b.filtrosAplicados==='object' && Array.isArray(b.filtrosAplicados.modalidades)) s.filtrosAplicados = b.filtrosAplicados;
+  if(typeof b.nickAplicado==='string' || b.nickAplicado===null) s.nickAplicado = b.nickAplicado;
+  if(b.ultimoErro && typeof b.ultimoErro==='object') s.ultimoErro = b.ultimoErro;
+  else if('ultimoErro' in b) s.ultimoErro = null;
+  if(Array.isArray(b.ignorados)) s.ignorados = b.ignorados.filter(function(k){ return typeof k==='string'; }).slice(-2000);
 }

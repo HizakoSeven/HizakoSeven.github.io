@@ -1,5 +1,6 @@
 /* Importacao de PGN: parsing e wiring do formulario de import. */
 import { renderPartidas } from './partidas.js';
+import { chavePartida, montarIndice, ordenarPorFim, removerIgnorado } from './dedupe.js';
 import { autoDetectLado, persist } from './persistence.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { state } from './state.js';
@@ -33,7 +34,7 @@ export function extractSanTokens(movetext){
 
     var annMatch = it.match(/[!?]+$/);
     var annotation = annMatch ? annMatch[0] : '';
-    var clean = it.replace(/[!?]+$/, '');
+    var clean = it.replace(/[!?]+$/, '').replace(/^\d+\.(\.\.)?/, '');
 
     var clk = null, timestampDs = null;
     var next = items[i+1];
@@ -79,6 +80,37 @@ export function splitMultiPgn(raw){
   return parts.length ? parts : [trimmed];
 }
 
+var contadorId = 0;
+
+/* id interno unico, mesmo em lote rapido. A identidade "real" da partida e game.fonteId. */
+export function novoIdPartida(){
+  contadorId++;
+  return 'g'+Date.now()+'_'+contadorId;
+}
+
+/* Dado o texto de UMA partida em PGN, devolve { ok:true, game } ou { ok:false, ... }.
+   `vazio:true` = nao havia lances. Usada pela importacao manual e pela sincronizacao. */
+export function construirPartida(pgnTexto, idUnico){
+  var headers = extractHeaders(pgnTexto);
+  var tokens = extractSanTokens(extractMovetext(pgnTexto));
+  if(tokens.length===0) return { ok:false, vazio:true };
+  var built = buildGameFromSan(tokens);
+  if(!built.ok){
+    return { ok:false, appliedCount:built.appliedCount, failedToken:built.failedToken, error:built.error };
+  }
+  var game = {
+    id: idUnico || novoIdPartida(),
+    headers: headers,
+    applied: built.applied.map(function(mv){ return { san:mv.san, from:mv.from, to:mv.to, color:mv.color, annotation:mv.annotation||'', clk:mv.clk||null, timestampDs:(mv.timestampDs===undefined?null:mv.timestampDs) }; }),
+    fens: built.fens,
+    savedAt: Date.now(),
+    meuLado: autoDetectLado(headers, state.meuNick)
+  };
+  game.fonte = 'manual';
+  game.fonteId = chavePartida({ headers:headers, applied:game.applied });
+  return { ok:true, game:game };
+}
+
 export async function importPgnText(raw){
   var errEl = document.getElementById('importError');
   errEl.style.display = 'none';
@@ -94,35 +126,38 @@ export async function importPgnText(raw){
   }
   var chunks = splitMultiPgn(raw);
   var imported = 0;
+  var jaExistiam = 0;
   var lastError = null;
+  /* sem `await` dentro do laco: checar o indice e inserir acontecem no mesmo trecho sincrono */
+  var indice = montarIndice(state.partidas);
   for(var i=0;i<chunks.length;i++){
-    var headers = extractHeaders(chunks[i]);
-    var movetext = extractMovetext(chunks[i]);
-    var tokens = extractSanTokens(movetext);
-    if(tokens.length===0) continue;
-    var built = buildGameFromSan(tokens);
-    if(!built.ok){
-      lastError = 'Não consegui ler uma partida a partir do lance '+(built.appliedCount!==undefined ? (built.appliedCount+1) : '?')+' ("'+escapeHtml(built.failedToken||'?')+'"). Confira se o texto foi copiado por inteiro.';
+    var r = construirPartida(chunks[i], novoIdPartida());
+    if(r.vazio) continue;
+    if(!r.ok){
+      lastError = 'Não consegui ler uma partida a partir do lance '+(r.appliedCount!==undefined ? (r.appliedCount+1) : '?')+' ("'+escapeHtml(r.failedToken||'?')+'"). Confira se o texto foi copiado por inteiro.';
       continue;
     }
-    var game = {
-      id: 'g'+Date.now()+'_'+i,
-      headers: headers,
-      applied: built.applied.map(function(mv){ return { san:mv.san, from:mv.from, to:mv.to, color:mv.color, annotation:mv.annotation||'', clk:mv.clk||null, timestampDs:(mv.timestampDs===undefined?null:mv.timestampDs) }; }),
-      fens: built.fens,
-      savedAt: Date.now(),
-      meuLado: autoDetectLado(headers, state.meuNick)
-    };
-    state.partidas.unshift(game);
+    var chave = r.game.fonteId;
+    if(indice.has(chave)){ jaExistiam++; continue; }
+    state.partidas.push(r.game);
+    indice.add(chave);
+    removerIgnorado(state.sync.ignorados, chave); /* colou de propósito: não deve ficar na lista de removidas */
     imported++;
   }
-  if(imported>0){
-    await persist();
+  if(imported>0 || jaExistiam>0){
+    if(imported>0){
+      state.partidas = ordenarPorFim(state.partidas);
+      await persist();
+    }
     document.getElementById('pgnPaste').value = '';
-    showToast(imported===1 ? 'Partida importada.' : imported+' partidas importadas.');
-    renderPartidas();
-    renderHeaderStats();
-    renderHoje();
+    var msg = imported===0 ? '' : (imported===1 ? 'Partida importada.' : imported+' partidas importadas.');
+    if(jaExistiam>0) msg += (msg?' ':'')+(jaExistiam===1 ? '1 partida já estava no caderno.' : jaExistiam+' partidas já estavam no caderno.');
+    showToast(msg);
+    if(imported>0){
+      renderPartidas();
+      renderHeaderStats();
+      renderHoje();
+    }
   }
   if(lastError){
     errEl.textContent = lastError;

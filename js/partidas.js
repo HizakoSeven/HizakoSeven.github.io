@@ -1,6 +1,8 @@
 /* Visualizador de partidas importadas: tabuleiro, navegacao de lances, painel de erro rapido. */
 import { cancelarAnaliseCompleta, clkParaSegundos, iniciarAnaliseCompleta, mapClasseParaTipo } from './analysis.js';
 import { boardSquaresHTML } from './board.js';
+import { adicionarIgnorado, chavePartida } from './dedupe.js';
+import { fraseDesfecho, rotuloModalidade, urlChesscomSegura } from './fonte-chesscom.js';
 import { persist } from './persistence.js';
 import { atualizarTelasDeErros, collectErroEditValues, erroEditFieldsHTML, removerErro, renderErros, tipoLabel } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
@@ -32,13 +34,17 @@ export function renderPartidas(){
   }
   wrap.innerHTML = state.partidas.map(function(g){
     var h = g.headers||{};
-    var meta = [h.Date, h.TimeControl, h.Result, (h.ECO?h.ECO+(h.Opening?' — '+h.Opening:''):h.Opening)].filter(Boolean).join(' · ');
+    var ext = extrasResumo(g);
+    /* com dados do Chess.com o ritmo vai na linha extra (formatado), pra nao aparecer duas vezes */
+    var meta = [h.Date, ext ? '' : h.TimeControl, h.Result, (h.ECO?h.ECO+(h.Opening?' — '+h.Opening:''):h.Opening)].filter(Boolean).join(' · ');
+    var novo = g.novaEm && (Date.now()-g.novaEm) < 7*86400000;
     var aberta = state.openGameId===g.id;
     return '<div class="partida-block">'+
       '<div class="partida-card">'+
         '<div class="partida-info">'+
-          '<div class="pi-players">'+escapeHtml(h.White||'Brancas')+' vs '+escapeHtml(h.Black||'Pretas')+'</div>'+
+          '<div class="pi-players">'+escapeHtml(h.White||'Brancas')+' vs '+escapeHtml(h.Black||'Pretas')+(novo ? ' <span class="badge-novo">novo</span>' : '')+'</div>'+
           '<div class="pi-meta">'+escapeHtml(meta)+'</div>'+
+          (ext ? '<div class="pi-meta">'+ext.partes.join(' · ')+'</div>' : '')+
           (g.notaGeral ? '<div class="pi-meta" style="font-style:italic;margin-top:2px;">"'+escapeHtml(g.notaGeral)+'"</div>' : '')+
         '</div>'+
         '<div class="btn-row">'+
@@ -58,6 +64,10 @@ export function renderPartidas(){
   wrap.querySelectorAll('[data-delgame]').forEach(function(btn){
     btn.addEventListener('click', async function(){
       if(!confirm('Remover essa partida do caderno?')) return;
+      var removida = state.partidas.find(function(x){ return x.id===btn.dataset.delgame; });
+      if(removida){ /* tombstone: a sincronizacao nao pode trazer de volta o que voce removeu */
+        adicionarIgnorado(state.sync.ignorados, removida.fonteId || chavePartida({ headers:removida.headers, applied:removida.applied }));
+      }
       state.partidas = state.partidas.filter(function(x){ return x.id!==btn.dataset.delgame; });
       if(state.openGameId===btn.dataset.delgame){ state.openGameId=null; }
       renderPartidas();
@@ -76,6 +86,7 @@ export function openGame(id){
   state.currentPly = 0;
   var g = state.partidas.find(function(x){ return x.id===id; });
   state.boardFlipped = !!(g && g.meuLado==='b'); /* como Lichess/Chess.com: seu lado embaixo */
+  if(g && g.novaEm){ delete g.novaEm; persist(); } /* abriu: some o selo "novo" */
   renderPartidas();
   var slot = document.getElementById('viewerSlot-'+id);
   if(slot){
@@ -157,6 +168,45 @@ export function renderViewer(){
 }
 
 /* Dados da partida (aba Info). */
+function fmtPct(n){ return n.toFixed(1).replace('.', ','); }
+
+/* Linhas (ja escapadas) com o que veio do Chess.com; null se a partida nao tem `extras`. */
+function extrasResumo(game){
+  var ex = game.extras;
+  if(!ex || typeof ex!=='object') return null;
+  var h = game.headers || {};
+  var meu = game.meuLado;
+  var minha = meu==='w' ? ex.brancas : meu==='b' ? ex.pretas : null;
+  var adv = meu==='w' ? ex.pretas : meu==='b' ? ex.brancas : null;
+  var r = { partes:[], modalidade:'', ritmo:'', tipo:'', desfecho:'', ratings:'', precisao:'', link:'' };
+  r.modalidade = escapeHtml(rotuloModalidade(ex.modalidade));
+  r.ritmo = escapeHtml(formatTimeControl(h.TimeControl));
+  r.tipo = ex.avaliada===true ? 'avaliada' : (ex.avaliada===false ? 'amistosa' : '');
+  r.desfecho = escapeHtml(fraseDesfecho(ex, meu));
+  function rt(l){ return l && typeof l.rating==='number' ? l.rating : null; }
+  if(minha && adv && rt(minha)!==null && rt(adv)!==null){
+    r.ratings = 'Rating: <strong>'+escapeHtml(rt(minha))+'</strong> vs '+escapeHtml(rt(adv));
+  } else if(rt(ex.brancas)!==null && rt(ex.pretas)!==null){
+    r.ratings = 'Rating: '+escapeHtml(rt(ex.brancas))+' (brancas) / '+escapeHtml(rt(ex.pretas))+' (pretas)';
+  }
+  var p = ex.precisao;
+  if(p && typeof p==='object'){
+    var pw = typeof p.w==='number' ? fmtPct(p.w)+'%' : null, pb = typeof p.b==='number' ? fmtPct(p.b)+'%' : null;
+    if(meu){
+      var pm = meu==='w' ? pw : pb, pa = meu==='w' ? pb : pw;
+      var t = [pm ? pm+' você' : null, pa ? pa+' adversário' : null].filter(Boolean).join(' / ');
+      if(t) r.precisao = 'Precisão: '+escapeHtml(t);
+    } else {
+      var t2 = [pw ? pw+' brancas' : null, pb ? pb+' pretas' : null].filter(Boolean).join(' / ');
+      if(t2) r.precisao = 'Precisão: '+escapeHtml(t2);
+    }
+  }
+  var u = urlChesscomSegura(ex.url);
+  if(u) r.link = '<a href="'+escapeHtml(u)+'" target="_blank" rel="noopener">abrir no Chess.com</a>';
+  r.partes = [r.modalidade, r.ritmo, r.tipo, r.desfecho, r.ratings, r.precisao, r.link].filter(Boolean);
+  return r.partes.length ? r : null;
+}
+
 function infoPartidaHTML(game){
   var h = game.headers || {};
   var linhas = [];
@@ -169,6 +219,14 @@ function infoPartidaHTML(game){
   add('Abertura', escapeHtml((h.ECO ? h.ECO+' ' : '') + (h.Opening||'')));
   var url = h.Link || h.Site || '';
   if(/^https?:\/\//.test(url)) add('Partida', '<a href="'+escapeHtml(url)+'" target="_blank" rel="noopener">abrir no site</a>');
+  var ext = extrasResumo(game);
+  if(ext){
+    add('Modalidade', [ext.modalidade, ext.tipo].filter(Boolean).join(' · '));
+    add('Desfecho', ext.desfecho);
+    add('Ratings', ext.ratings.replace(/^Rating: /, ''));
+    add('Precisão', ext.precisao.replace(/^Precisão: /, ''));
+    if(!/^https?:\/\//.test(url)) add('Partida', ext.link);
+  }
   return linhas.length ? '<dl class="game-meta">'+linhas.join('')+'</dl>' : '';
 }
 
