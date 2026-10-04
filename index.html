@@ -396,8 +396,6 @@
   .card-compact h2{font-size:18px;margin:0;}
   label.checklist-item{text-transform:none;letter-spacing:0;font-weight:400;font-size:14px;color:var(--ink);margin:0;}
   label.btn{text-transform:none;letter-spacing:0;margin:0;display:inline-block;color:var(--ink-soft);}
-  .footer-nick{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);margin-top:8px;width:100%;}
-  .footer-nick input{width:140px;display:inline-block;margin:0 4px;padding:2px 6px;font-size:12px;}
   footer{margin-top:var(--sp-5);}
 
   /* Hoje em duas colunas */
@@ -537,6 +535,24 @@
   body.compacto{font-size:14px;}
   body.compacto .app{padding-top:var(--sp-2);}
   body.compacto .explica{display:none;}
+  /* ===== menu Opcoes (topo) + pedido de nick ===== */
+  .tb-pop>summary{background:transparent;border:1px solid rgba(255,255,255,.28);color:rgba(234,226,206,.92);padding:5px 10px;font:600 12px var(--font-body);}
+  .tb-pop>summary:hover,.tb-pop[open]>summary{background:rgba(255,255,255,.1);color:#fff;border-color:rgba(255,255,255,.28);}
+  .tb-pop>summary:after{color:var(--amber);}
+  .tb-pop .pop-body{color:var(--ink);width:min(340px,calc(100vw - 32px));}
+  .opcoes-body .opt-group{padding:10px 0;border-bottom:1px solid var(--line);}
+  .opcoes-body .opt-group:first-child{padding-top:0;}
+  .opcoes-body .opt-group:last-child{border-bottom:none;padding-bottom:0;}
+  .opcoes-body input[type=text]{margin-bottom:4px;}
+  .opt-title{display:block;font-size:12.5px;font-weight:600;color:var(--ink-soft);text-transform:uppercase;letter-spacing:.03em;margin-bottom:6px;}
+  .opt-hint{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin:0;}
+  .opcoes-body .save-bar{display:block;margin-bottom:0;}
+  #compactBtn[aria-pressed="true"]{background:var(--board-dark);color:var(--board-light);border-color:var(--board-dark);}
+  .nick-modal{position:fixed;inset:0;z-index:1500;background:rgba(36,26,20,.55);display:flex;align-items:center;justify-content:center;padding:var(--sp-4);}
+  .nick-modal[hidden]{display:none;}
+  .nick-modal-card{background:var(--card);border-radius:var(--radius);padding:var(--sp-5);width:min(420px,100%);box-shadow:0 14px 40px var(--shadow);}
+  .nick-modal-card h2{font-family:var(--font-display);font-size:22px;margin:0 0 var(--sp-2);}
+  .nick-modal-card .btn-row{margin:0 0 var(--sp-3);}
   body.compacto .card{padding:var(--sp-2) var(--sp-3);margin-bottom:var(--sp-2);}
   body.compacto details,body.compacto details.fold{margin-bottom:var(--sp-2);}
   body.compacto summary,body.compacto .fold>summary{padding:7px 12px;font-size:14.5px;}
@@ -570,8 +586,31 @@
     <p class="stats-mini" id="statsMini">carregando estatísticas…</p>
     <p class="storage-status" id="storageStatus" style="display:none;"></p>
     <div class="tb-actions">
-      <button type="button" class="tb-btn" id="foldAllBtn" title="Recolher ou expandir todas as seções desta aba">▾<span class="tb-lbl"> Seções</span></button>
-      <button type="button" class="tb-btn" id="compactBtn" aria-pressed="false" title="Modo compacto: menos espaço e sem textos explicativos">⇕<span class="tb-lbl"> Compacto</span></button>
+      <details class="popover tb-pop" id="opcoesMenu">
+        <summary title="Opções, backup e seu nick">⚙<span class="tb-lbl"> Opções</span></summary>
+        <div class="pop-body opcoes-body">
+          <div class="opt-group">
+            <label for="meuNickInput">Seu nick no Chess.com/Lichess</label>
+            <input type="text" id="meuNickInput" value="" placeholder="seu nick" autocomplete="off" autocapitalize="off" spellcheck="false">
+            <p class="opt-hint">Usado pra saber de que lado você jogou, sozinho.</p>
+          </div>
+          <div class="opt-group">
+            <span class="opt-title">Visual</span>
+            <button type="button" class="btn btn-ghost btn-sm" id="compactBtn" aria-pressed="false" title="Modo compacto: menos espaço e sem textos explicativos">⇕ Modo compacto</button>
+          </div>
+          <div class="opt-group save-bar">
+            <span class="opt-title">Backup</span>
+            <div class="btn-row">
+              <button class="btn btn-ghost btn-sm" id="saveFileBtn">Baixar</button>
+              <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">
+                Carregar
+                <input type="file" id="loadFileInput" accept=".json" style="display:none;">
+              </label>
+            </div>
+            <span class="save-bar-info" id="saveBarInfo" style="display:block;margin:6px 0 0;"></span>
+          </div>
+        </div>
+      </details>
     </div>
   </div>
 </header>
@@ -908,18 +947,21 @@
 
   <footer>
     <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 12</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
-    <div class="footer-nick">Seu nick no Chess.com/Lichess: <input type="text" id="meuNickInput" value="" placeholder="seu nick"> <span>(usado pra saber de que lado você jogou, sozinho)</span></div>
-    <div class="save-bar" style="margin:8px 0 0;font-size:12px;">
-      <span class="save-bar-group-label">Backup:</span>
-      <button class="btn btn-ghost btn-sm" id="saveFileBtn">Baixar</button>
-      <label class="btn btn-ghost btn-sm" style="cursor:pointer;margin:0;">
-        Carregar
-        <input type="file" id="loadFileInput" accept=".json" style="display:none;">
-      </label>
-      <span class="save-bar-info" id="saveBarInfo" style="display:inline;margin:0;"></span>
-    </div>
   </footer>
 
+</div>
+
+<div id="nickModal" class="nick-modal" role="dialog" aria-modal="true" aria-labelledby="nickModalTitulo" hidden>
+  <div class="nick-modal-card">
+    <h2 id="nickModalTitulo">Qual é o seu usuário?</h2>
+    <p class="lede">Digite seu nick do Chess.com ou do Lichess. Assim o caderno descobre sozinho de que lado você jogou em cada partida importada.</p>
+    <input type="text" id="nickModalInput" placeholder="seu nick" autocomplete="off" autocapitalize="off" spellcheck="false">
+    <div class="btn-row">
+      <button type="button" class="btn btn-primary" id="nickModalSalvar">Salvar</button>
+      <button type="button" class="btn btn-ghost" id="nickModalPular">Agora não</button>
+    </div>
+    <p class="opt-hint">Você pode mudar isso depois em ⚙ Opções.</p>
+  </div>
 </div>
 
 <div id="toast" class="toast" hidden></div>

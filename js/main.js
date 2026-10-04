@@ -29,8 +29,10 @@ window.addEventListener('unhandledrejection', function(e){
   showFatalBanner('erro no app: ' + reason + '. Recarregue a página; se persistir, anote essa mensagem e abra uma issue no GitHub.');
 });
 
-document.getElementById('meuNickInput').addEventListener('change', async function(e){
-  state.meuNick = e.target.value.trim();
+/* Grava o nick (menu Opcoes ou pergunta inicial): detecta o lado das partidas e gira o tabuleiro aberto. */
+async function salvarNick(valor){
+  state.meuNick = (valor||'').trim();
+  document.getElementById('meuNickInput').value = state.meuNick;
   backfillMeuLado();
   var gAberto = state.partidas.find(function(g){ return g.id===state.openGameId; });
   if(gAberto && gAberto.meuLado) state.boardFlipped = gAberto.meuLado==='b'; /* seu lado embaixo */
@@ -38,7 +40,40 @@ document.getElementById('meuNickInput').addEventListener('change', async functio
   renderPartidas();
   if(state.openGameId) renderViewer();
   showToast('Nick atualizado.');
-});
+}
+
+document.getElementById('meuNickInput').addEventListener('change', function(e){ salvarNick(e.target.value); });
+
+/* Primeira coisa ao entrar: se ainda nao ha nick, pergunta. "Agora não" so vale ate fechar a aba. */
+function pedirNickSeNecessario(){
+  if(state.meuNick) return;
+  var pulou = false;
+  try{ pulou = sessionStorage.getItem('caderno-nick-pulado')==='1'; }catch(e){}
+  if(pulou) return;
+  var modal = document.getElementById('nickModal');
+  var input = document.getElementById('nickModalInput');
+  function fechar(){ modal.hidden = true; document.removeEventListener('keydown', aoTecla, true); }
+  function salvar(){
+    var v = input.value.trim();
+    if(!v){ input.focus(); return; }
+    fechar();
+    salvarNick(v);
+  }
+  function pular(){
+    try{ sessionStorage.setItem('caderno-nick-pulado','1'); }catch(e){}
+    fechar();
+  }
+  function aoTecla(e){
+    if(e.key==='Escape'){ e.preventDefault(); e.stopPropagation(); pular(); }
+    else if(e.key==='Enter' && document.activeElement===input){ e.preventDefault(); salvar(); }
+  }
+  document.getElementById('nickModalSalvar').onclick = salvar;
+  document.getElementById('nickModalPular').onclick = pular;
+  document.addEventListener('keydown', aoTecla, true);
+  input.value = '';
+  modal.hidden = false;
+  input.focus();
+}
 
 function selectHTML(campo, rotulo, opcoes){
   return '<div><span class="cfg-label">'+rotulo+'</span><select data-cfg="'+campo+'">'+
@@ -161,6 +196,7 @@ export async function initApp(){
   openErroForm();
 
   document.getElementById('loadingOverlay').style.display = 'none';
+  pedirNickSeNecessario();
 }
 
 montarConfigMotor();

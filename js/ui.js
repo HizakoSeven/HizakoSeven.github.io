@@ -39,15 +39,6 @@ export function fecharPopovers(exceto){
   });
 }
 
-/* Recolhe tudo na aba atual; se ja estiver tudo recolhido, expande tudo. */
-export function alternarSecoesDaAba(){
-  var aba = document.querySelector('.tab-panel.active');
-  var lista = secoesRecolhiveis(aba);
-  if(!lista.length) return;
-  var algumaAberta = lista.some(function(d){ return d.open; });
-  lista.forEach(function(d){ d.open = !algumaAberta; });
-}
-
 export function iniciarUI(){
   ler();
   aplicarCompacto(prefs.compacto);
@@ -66,8 +57,6 @@ export function iniciarUI(){
 
   var compactBtn = document.getElementById('compactBtn');
   if(compactBtn) compactBtn.addEventListener('click', function(){ aplicarCompacto(!prefs.compacto); gravar(); });
-  var foldBtn = document.getElementById('foldAllBtn');
-  if(foldBtn) foldBtn.addEventListener('click', alternarSecoesDaAba);
 
   /* menus popover: um aberto por vez; clique fora ou Esc fecham */
   wrapArray(document.querySelectorAll('details.popover')).forEach(function(d){
