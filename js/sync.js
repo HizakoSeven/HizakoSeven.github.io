@@ -69,8 +69,12 @@ export function renderBarraSync(){
   if(!btn || !st) return;
   var semNick = !(state.meuNick||'').trim();
   btn.disabled = sincronizando || semNick;
-  btn.textContent = sincronizando ? 'Buscando...' : (semNick ? 'Defina seu nick em Opções' : '↻ Atualizar do Chess.com');
-  btn.title = semNick ? 'Defina seu nick em Opções' : 'Busca partidas novas no Chess.com agora';
+  var rotulo = sincronizando ? 'Buscando...' : (semNick ? 'Defina seu nick em Opções' : 'Atualizar do Chess.com');
+  var rot = btn.querySelector('.rot-sync');
+  if(rot) rot.textContent = ' '+rotulo; /* no topo o texto some (so o icone); o aria-label e o title cobrem */
+  btn.classList.toggle('buscando', sincronizando);
+  btn.setAttribute('aria-label', rotulo);
+  btn.title = semNick ? 'Defina seu nick em Opções' : (sincronizando ? 'Buscando partidas…' : 'Busca partidas novas no Chess.com agora');
 
   var s = state.sync, texto = '', erro = false;
   if(sincronizando){

@@ -548,6 +548,22 @@
   .opt-hint{font-family:var(--font-mono);font-size:11.5px;color:var(--ink-soft);margin:0;}
   .opcoes-body .save-bar{display:block;margin-bottom:0;}
   .sync-status{font-family:var(--font-mono);font-size:12px;color:var(--ink-soft);min-width:0;}
+  /* grupo de acoes da aba Partidas: vive na toolbar da pagina e sobe pra barra do topo ao rolar (js/barra-topo.js) */
+  .tb-grupo{display:flex;align-items:center;gap:6px;}
+  .tb-ctx{display:flex;align-items:center;}
+  .tb-ctx:empty{display:none;}
+  .sync-ic{display:inline-block;}
+  #syncBtn.buscando .sync-ic{animation:sync-giro 1s linear infinite;}
+  @keyframes sync-giro{to{transform:rotate(360deg);}}
+  @media (prefers-reduced-motion:reduce){ #syncBtn.buscando .sync-ic{animation:none;} }
+  .import-pop .lede{margin:0 0 10px;}
+  .tab-drop-ativa{outline:2px dashed var(--brass);outline-offset:4px;border-radius:var(--radius-sm);}
+  #tbContextual #syncBtn{background:transparent;border:1px solid rgba(255,255,255,.28);color:rgba(234,226,206,.92);padding:5px 10px;font:600 12px var(--font-body);box-shadow:none;border-radius:6px;}
+  #tbContextual #syncBtn:hover:not(:disabled){background:rgba(255,255,255,.1);color:#fff;}
+  #tbContextual #syncBtn:disabled{opacity:.55;cursor:default;}
+  #tbContextual .rot-sync{display:none;}
+  #tbContextual #importPopover .pop-body{width:min(440px,calc(100vw - 32px));}
+  @media (max-width:900px){ #tbContextual .rot{display:none;} }
   .sync-status.erro{color:var(--flag-red);}
   .badge-novo{display:inline-block;margin-left:6px;padding:1px 7px;border-radius:999px;background:var(--amber);color:#fff;font:700 10.5px var(--font-body);text-transform:uppercase;letter-spacing:.04em;vertical-align:middle;}
   .opt-check{display:flex;align-items:center;gap:6px;font-size:13.5px;margin:0 0 6px;cursor:pointer;}
@@ -593,6 +609,7 @@
     <p class="stats-mini" id="statsMini">carregando estatísticas…</p>
     <p class="storage-status" id="storageStatus" style="display:none;"></p>
     <div class="tb-actions">
+      <span class="tb-ctx" id="tbContextual"></span>
       <details class="popover tb-pop" id="opcoesMenu">
         <summary title="Opções, backup e seu nick">⚙<span class="tb-lbl"> Opções</span></summary>
         <div class="pop-body opcoes-body">
@@ -943,34 +960,36 @@
     </section>
 
     <section id="tab-partidas" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-partidas">
-      <div class="toolbar">
+      <div class="toolbar" id="partidasToolbar">
         <h2 class="tb-title">Partidas</h2>
-        <button type="button" class="btn btn-primary btn-sm" id="syncBtn" disabled>↻ Atualizar do Chess.com</button>
         <span class="sync-status" id="syncStatus" aria-live="polite"></span>
         <span class="tb-spacer"></span>
-        <details class="popover">
-          <summary>⚙ Motor</summary>
-          <div class="pop-body"><div class="motor-config-slot"></div></div>
-        </details>
-      </div>
-
-      <details id="importDetails" class="import-details" open>
-        <summary>Importar partidas (PGN)</summary>
-        <div class="details-body">
-          <p class="lede explica">Cole o PGN de uma partida do Chess.com ou Lichess (ou arraste o arquivo .pgn pra cá) pra reviver e marcar erros direto no tabuleiro. Colar já importa sozinho.</p>
-          <div class="import-drop" id="importDropZone">
-            <textarea id="pgnPaste" placeholder="Cole aqui o PGN da partida (ou de várias, coladas em sequência)... colar já importa automático" style="min-height:90px;"></textarea>
-            <div class="btn-row">
-              <button class="btn btn-primary" id="importBtn">Importar partida(s)</button>
-              <label class="btn btn-ghost" style="cursor:pointer;">
-                Enviar arquivo .pgn
-                <input type="file" id="pgnFile" accept=".pgn,.txt" style="display:none;">
-              </label>
+        <span id="partidasAcoesAncora" hidden></span>
+        <span class="tb-grupo" id="partidasAcoes">
+          <button type="button" class="btn btn-primary btn-sm" id="syncBtn" disabled aria-label="Atualizar do Chess.com"><span class="sync-ic">↻</span><span class="rot-sync"> Atualizar do Chess.com</span></button>
+          <details class="popover" id="importPopover">
+            <summary title="Importar partidas de um PGN">⬆<span class="rot"> Importar PGN</span></summary>
+            <div class="pop-body import-pop">
+              <p class="lede explica">Cole o PGN de uma partida do Chess.com ou Lichess (ou arraste o arquivo .pgn pra cá) pra reviver e marcar erros direto no tabuleiro. Colar já importa sozinho.</p>
+              <div class="import-drop" id="importDropZone">
+                <textarea id="pgnPaste" placeholder="Cole aqui o PGN da partida (ou de várias, coladas em sequência)... colar já importa automático" style="min-height:90px;"></textarea>
+                <div class="btn-row">
+                  <button class="btn btn-primary" id="importBtn">Importar partida(s)</button>
+                  <label class="btn btn-ghost" style="cursor:pointer;">
+                    Enviar arquivo .pgn
+                    <input type="file" id="pgnFile" accept=".pgn,.txt" style="display:none;">
+                  </label>
+                </div>
+                <p class="import-error" id="importError"></p>
+              </div>
             </div>
-            <p class="import-error" id="importError"></p>
-          </div>
-        </div>
-      </details>
+          </details>
+          <details class="popover" id="motorPopover">
+            <summary title="Configurações do motor">⚙<span class="rot"> Motor</span></summary>
+            <div class="pop-body"><div class="motor-config-slot"></div></div>
+          </details>
+        </span>
+      </div>
 
       <div id="partidasListWrap"></div>
     </section>
@@ -978,7 +997,7 @@
   </main>
 
   <footer>
-    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 13</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
+    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 14</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
   </footer>
 
 </div>

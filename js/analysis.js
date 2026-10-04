@@ -44,10 +44,14 @@ export function derivarClassificacoesPorPly(todasLinhas, applied, porPlyExistent
     var mv = applied[p-1];
 
     var quantoSacrificou = 0;
-    if(fens && mv && fens[p-1] && fens[p+1]){
+    /* compara com a posicao DEPOIS do proximo lance de quem jogou (p+2), nao so depois da resposta do adversario (p+1):
+       uma troca em que voce recaptura logo em seguida fica material-neutra e nao conta como sacrificio.
+       Sem p+2 (fim da partida), cai pro p+1. */
+    var idxDepois = (fens && fens[p+2]) ? p+2 : p+1;
+    if(fens && mv && fens[p-1] && fens[idxDepois]){
       try{
         var balAntes = materialBalance(fens[p-1], mv.color);
-        var balDepois = materialBalance(fens[p+1], mv.color);
+        var balDepois = materialBalance(fens[idxDepois], mv.color);
         quantoSacrificou = balAntes - balDepois;
       }catch(e){}
     }
@@ -65,70 +69,91 @@ export function derivarClassificacoesPorPly(todasLinhas, applied, porPlyExistent
   return porPly;
 }
 
+var loopAnaliseAtivo = false; /* true enquanto um laco de analise ainda esta rodando (inclusive terminando de cancelar) */
+
 export async function iniciarAnaliseCompleta(game, opcoes){
   opcoes = opcoes || {};
-  if(state.analiseEmAndamento && !state.analiseEmAndamento.cancelado) return;
-  var total = game.fens.length;
-  state.analiseEmAndamento = { gameId: game.id, atual: 0, total: total, cancelado: false };
-  renderAnaliseMotorUI(game);
-
-  iniciarMotor();
-  var statusMotor = await new Promise(function(resolve){
-    if(engineState==='pronto'){ resolve('pronto'); return; }
-    if(engineState==='falhou'){ resolve('falhou'); return; }
-    var tentativas = 0;
-    var checar = setInterval(function(){
-      tentativas++;
-      if(engineState==='pronto'){ clearInterval(checar); resolve('pronto'); }
-      else if(engineState==='falhou'){ clearInterval(checar); resolve('falhou'); }
-      else if(tentativas>200){ clearInterval(checar); resolve('falhou'); } /* seguranca: ~10s sem resposta */
-    }, 50);
-  });
-  if(statusMotor==='falhou'){
-    state.analiseEmAndamento = null;
-    showToast('Não consegui carregar o motor de xadrez — confira os arquivos em engine/.');
-    renderAnaliseMotorUI(game);
+  if(loopAnaliseAtivo){
+    /* cancelar e comecar outra na hora sobreporia os dois lacos: espera o anterior encerrar */
+    if(state.analiseEmAndamento && state.analiseEmAndamento.cancelado) showToast('Aguarde um instante: a análise anterior ainda está encerrando.');
     return;
   }
-  reiniciarHashMotor(); /* zera o hash antes da 1a busca: cada analise completa parte do mesmo estado */
+  loopAnaliseAtivo = true;
+  var total = game.fens.length;
+  /* referencia LOCAL: este laco so le/escreve o proprio objeto, nunca o state.analiseEmAndamento de outra analise */
+  var minha = { gameId: game.id, atual: 0, total: total, cancelado: false };
+  state.analiseEmAndamento = minha;
+  try{
+    renderAnaliseMotorUI(game);
 
-  var todasLinhas = new Array(total);
-  var depthAnalise = opcoes.depth || state.motorConfig.depthAnalise || 20;
-  var multiPvAnalise = Math.max(2, state.motorConfig.multiPv || 1); /* Great precisa comparar a 1a com a 2a linha */
-
-  var motorCaiu = false;
-
-  function avaliarIndice(idx){
-    return new Promise(function(resolve){
-      avaliarFEN(game.fens[idx], function(res){
-        if(res && res.falhou){ motorCaiu = true; resolve(); return; }
-        if(res && res.parcial){ resolve(); return; } /* busca interrompida (cancelar): resultado raso, descarta */
-        var linhas = (res && res.linhas) || [];
-        todasLinhas[idx] = linhas.length ? linhas : [{cp:0, mate:null, pv:[]}];
-        state.analiseEmAndamento.atual = idx+1;
-        renderAnaliseMotorUI(game);
-        resolve();
-      }, { depth: depthAnalise, multiPv: multiPvAnalise, segundoPlano: true });
+    iniciarMotor();
+    var statusMotor = await new Promise(function(resolve){
+      if(engineState==='pronto'){ resolve('pronto'); return; }
+      if(engineState==='falhou'){ resolve('falhou'); return; }
+      var tentativas = 0;
+      var checar = setInterval(function(){
+        tentativas++;
+        if(engineState==='pronto'){ clearInterval(checar); resolve('pronto'); }
+        else if(engineState==='falhou'){ clearInterval(checar); resolve('falhou'); }
+        else if(tentativas>200){ clearInterval(checar); resolve('falhou'); } /* seguranca: ~10s sem resposta */
+      }, 50);
     });
-  }
+    if(statusMotor==='falhou'){
+      showToast('Não consegui carregar o motor de xadrez — confira os arquivos em engine/.');
+      return;
+    }
+    reiniciarHashMotor(); /* zera o hash antes da 1a busca: cada analise completa parte do mesmo estado */
 
-  for(var i=0;i<total;i++){
-    if(state.analiseEmAndamento.cancelado || motorCaiu) break;
-    await avaliarIndice(i);
-  }
+    var todasLinhas = new Array(total);
+    var depthAnalise = opcoes.depth || state.motorConfig.depthAnalise || 20;
+    var depthReserva = Math.max(10, depthAnalise-6); /* 2a tentativa quando uma posicao estoura o tempo */
+    var multiPvAnalise = Math.max(2, state.motorConfig.multiPv || 1); /* Great precisa comparar a 1a com a 2a linha */
 
-  var completo = !state.analiseEmAndamento.cancelado && !motorCaiu;
-  var porPlyExistente = (game.analiseMotor && game.analiseMotor.porPly) || {};
-  var porPly = derivarClassificacoesPorPly(todasLinhas, game.applied, porPlyExistente, game.fens);
-  game.analiseMotor = { porPly: porPly, feitoEm: Date.now(), completo: completo, depthUsado: depthAnalise };
-  state.analiseEmAndamento = null;
-  await persist();
-  renderAnaliseMotorUI(game);
-  renderMovelist(game);
-  renderPainelTempo(game);
-  showToast(completo ? 'Análise completa!' : (motorCaiu
-    ? 'O motor parou de responder — o que já tinha sido calculado foi mantido.'
-    : 'Análise cancelada — o que já tinha sido calculado foi mantido.'));
+    var motorCaiu = false;
+    var semResultado = 0; /* posicoes que NAO foram avaliadas (sem ser por cancelamento) */
+
+    function avaliarIndice(idx, depth){
+      return new Promise(function(resolve){
+        avaliarFEN(game.fens[idx], function(res){
+          if(res && res.falhou){ motorCaiu = true; resolve('falhou'); return; }
+          if(res && res.parcial){ resolve('parcial'); return; } /* busca interrompida (cancelar ou tempo estourado): resultado raso, descarta */
+          var linhas = (res && res.linhas) || [];
+          todasLinhas[idx] = linhas.length ? linhas : [{cp:0, mate:null, pv:[]}];
+          minha.atual = idx+1;
+          renderAnaliseMotorUI(game);
+          resolve('ok');
+        }, { depth: depth, multiPv: multiPvAnalise, segundoPlano: true });
+      });
+    }
+
+    for(var i=0;i<total;i++){
+      if(minha.cancelado || motorCaiu) break;
+      var r = await avaliarIndice(i, depthAnalise);
+      if(r==='parcial' && !minha.cancelado && !motorCaiu){
+        /* estourou o tempo (watchdog): tenta uma vez mais com profundidade menor antes de desistir da posicao */
+        r = await avaliarIndice(i, depthReserva);
+        if(r!=='ok' && !minha.cancelado && !motorCaiu) semResultado++;
+      }
+    }
+
+    /* "completo" so se TODAS as posicoes foram avaliadas: um estouro de tempo nao pode passar por analise completa */
+    var completo = !minha.cancelado && !motorCaiu && semResultado===0;
+    var porPlyExistente = (game.analiseMotor && game.analiseMotor.porPly) || {};
+    var porPly = derivarClassificacoesPorPly(todasLinhas, game.applied, porPlyExistente, game.fens);
+    game.analiseMotor = { porPly: porPly, feitoEm: Date.now(), completo: completo, depthUsado: depthAnalise, faltantes: semResultado };
+    await persist();
+    renderMovelist(game);
+    renderPainelTempo(game);
+    showToast(completo ? 'Análise completa!' : (motorCaiu
+      ? 'O motor parou de responder — o que já tinha sido calculado foi mantido.'
+      : (minha.cancelado
+        ? 'Análise cancelada — o que já tinha sido calculado foi mantido.'
+        : semResultado+(semResultado===1 ? ' posição não foi avaliada (tempo esgotado)' : ' posições não foram avaliadas (tempo esgotado)')+' — o resto foi mantido; tente analisar de novo.')));
+  } finally {
+    if(state.analiseEmAndamento===minha) state.analiseEmAndamento = null; /* nunca apaga a analise de outra */
+    loopAnaliseAtivo = false;
+    renderAnaliseMotorUI(game);
+  }
 }
 
 export function normalizarAvaliacao(info, inverterPerspectiva){

@@ -20,16 +20,19 @@ var ultimoTotalPartidas = null;
 
 export function renderPartidas(){
   var wrap = document.getElementById('partidasListWrap');
-  /* "Importar" fica aberto enquanto nao ha partidas; depois de importar (ou ao reabrir o app com partidas), recolhe */
-  var det = document.getElementById('importDetails');
+  /* o menu "Importar PGN" fecha sozinho quando entra partida nova (nao abre sozinho: a troca de aba fecharia) */
+  var det = document.getElementById('importPopover');
   var total = state.partidas.length;
-  if(det){
-    if(ultimoTotalPartidas===null) det.open = total===0;
-    else if(total>ultimoTotalPartidas) det.open = false;
-  }
+  if(det && ultimoTotalPartidas!==null && total>ultimoTotalPartidas) det.open = false;
   ultimoTotalPartidas = total;
   if(state.partidas.length===0){
-    wrap.innerHTML = '<div class="empty-state">Nenhuma partida importada ainda.</div>';
+    wrap.innerHTML = '<div class="empty-state">Nenhuma partida importada ainda.'+
+      '<div class="btn-row" style="justify-content:center;margin-top:10px;"><button class="btn btn-primary btn-sm" id="abrirImportarBtn">⬆ Importar partidas</button></div></div>';
+    var abrir = document.getElementById('abrirImportarBtn');
+    if(abrir) abrir.addEventListener('click', function(e){
+      e.stopPropagation(); /* senao o "clique fora" do ui.js fecharia o menu na mesma hora */
+      if(det){ det.open = true; var ta = document.getElementById('pgnPaste'); if(ta) setTimeout(function(){ ta.focus(); }, 0); }
+    });
     return;
   }
   wrap.innerHTML = state.partidas.map(function(g){

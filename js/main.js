@@ -1,4 +1,5 @@
 /* Ponto de entrada: listeners globais, troca de abas, inicializacao do app. */
+import { reavaliarBarraTopo, devolverBarraTopo, iniciarBarraTopo } from './barra-topo.js';
 import { renderPartidas, renderViewer } from './partidas.js';
 import { APP_STATE_KEY, LOCAL_SERVER_MODE, applyStateBlob, backfillMeuLado, definirModoServidorLocal, detectarServidorLocal, loadFromLocalServer, loadJSON, persist, renderStorageStatus, testStorage } from './persistence.js';
 import { openErroForm, renderErros } from './render-erros.js';
@@ -145,6 +146,7 @@ export function switchTab(name){
   document.querySelectorAll('.tab-panel').forEach(function(panel){
     panel.classList.toggle('active', panel.id==='tab-'+name);
   });
+  if(name==='partidas') reavaliarBarraTopo(); else devolverBarraTopo(); /* botoes da aba Partidas so ficam no topo nela */
 }
 
 document.querySelectorAll('.tab-btn').forEach(function(btn){
@@ -210,4 +212,5 @@ export async function initApp(){
 montarConfigMotor();
 iniciarUI();
 iniciarSync();
+iniciarBarraTopo();
 initApp();

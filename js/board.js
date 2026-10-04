@@ -33,12 +33,23 @@ export function fenToBoard(fen){
   return board;
 }
 
+/* Os gradientes das pecas de reserva (fallback em SVG) ficam num unico <defs> escondido na pagina, criado uma vez.
+   Antes cada peca repetia os mesmos ids (gw/gb) e o fill:url(#gw) dependia do primeiro da pagina. Fica com tamanho 0
+   (e nao display:none, que faria o gradiente nao renderizar). */
+function garantirGradientesPecas(){
+  if(document.getElementById('pieceGradDefs')) return;
+  var holder = document.createElement('div');
+  holder.innerHTML = '<svg id="pieceGradDefs" width="0" height="0" style="position:absolute;width:0;height:0;overflow:hidden;" aria-hidden="true" focusable="false"><defs>'+
+    '<linearGradient id="gw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="60%" stop-color="#F7F7F2"/><stop offset="100%" stop-color="#E2E2D8"/></linearGradient>'+
+    '<linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4a4a4a"/><stop offset="55%" stop-color="#262626"/><stop offset="100%" stop-color="#121212"/></linearGradient>'+
+    '</defs></svg>';
+  document.body.appendChild(holder.firstChild);
+}
+
 window.handlePieceImgError = function(imgEl, type, color){
   try{
-    var svgHtml = '<svg class="piece-icon piece-'+color+'" viewBox="0 0 45 45">'+
-      '<defs><linearGradient id="gw" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#FFFFFF"/><stop offset="60%" stop-color="#F7F7F2"/><stop offset="100%" stop-color="#E2E2D8"/></linearGradient>'+
-      '<linearGradient id="gb" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#4a4a4a"/><stop offset="55%" stop-color="#262626"/><stop offset="100%" stop-color="#121212"/></linearGradient></defs>'+
-      PIECE_SHAPES[type]+'</svg>';
+    garantirGradientesPecas();
+    var svgHtml = '<svg class="piece-icon piece-'+color+'" viewBox="0 0 45 45">'+PIECE_SHAPES[type]+'</svg>';
     imgEl.outerHTML = svgHtml;
   }catch(e){ /* se ate isso falhar, so deixa o alt-text do img aparecer */ }
 };

@@ -195,6 +195,32 @@ dropZone.addEventListener('drop', function(e){
   reader.readAsText(file);
 });
 
+/* Arrastar um arquivo pra QUALQUER lugar da aba Partidas tambem importa (a area do menu continua funcionando) */
+var abaPartidas = document.getElementById('tab-partidas');
+if(abaPartidas){
+  function temArquivo(e){ return !!(e.dataTransfer && Array.prototype.indexOf.call(e.dataTransfer.types||[], 'Files')!==-1); }
+  ['dragenter','dragover'].forEach(function(evt){
+    abaPartidas.addEventListener(evt, function(e){
+      if(!temArquivo(e)) return;
+      e.preventDefault();
+      abaPartidas.classList.add('tab-drop-ativa');
+    });
+  });
+  abaPartidas.addEventListener('dragleave', function(e){
+    if(!abaPartidas.contains(e.relatedTarget)) abaPartidas.classList.remove('tab-drop-ativa');
+  });
+  abaPartidas.addEventListener('drop', function(e){
+    abaPartidas.classList.remove('tab-drop-ativa');
+    if(!temArquivo(e)) return;
+    e.preventDefault();
+    var file = e.dataTransfer.files && e.dataTransfer.files[0];
+    if(!file) return;
+    var reader = new FileReader();
+    reader.onload = function(evt){ importPgnText(String(evt.target.result||'')); };
+    reader.readAsText(file);
+  });
+}
+
 document.getElementById('pgnFile').addEventListener('change', function(e){
   var file = e.target.files[0];
   if(!file) return;

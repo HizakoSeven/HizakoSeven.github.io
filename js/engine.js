@@ -40,6 +40,11 @@ var watchdogStopTimer = null;
 export function iniciarMotor(){
   if(engineState==='pronto' || engineState==='carregando') return;
   engineState = 'carregando';
+  /* worker novo nasce com as opcoes de fabrica do Stockfish (MultiPV 1, Hash 16): sem isto, depois de uma
+     queda o app achava que o MultiPV/hash antigos ainda valiam e nunca reenviava o setoption */
+  engineMultiPvAplicado = 1;
+  engineHashAplicado = 16;
+  novoJogoPendente = true;
   try{
     engineWorker = new Worker(ENGINE_JS_PATH);
   }catch(e){

@@ -107,7 +107,13 @@ export function renderPainelTempo(game){
 
   var temposList = pontos.map(function(p){ return p.tempo; });
   var medianaTempo = mediana(temposList);
-  var tempoTeto = Math.max.apply(null, temposList) || 1;
+  /* Um unico lance de 5 minutos achatava todos os outros pontos. O eixo vai ate o percentil 95 quando o maior
+     tempo passa muito dele; os pontos acima ficam encostados na borda direita (a dica mostra o tempo real). */
+  var tempoMax = Math.max.apply(null, temposList) || 1;
+  var ordenados = temposList.slice().sort(function(a,b){ return a-b; });
+  var p95 = ordenados[Math.floor(0.95*(ordenados.length-1))] || 1;
+  var eixoCortado = tempoMax > p95*1.5 && ordenados.length>=5;
+  var tempoTeto = eixoCortado ? Math.max(p95, 1) : tempoMax;
   var PERDA_TETO = 600; /* cp - acima disso ja e "blunder feio", nao precisa mais resolucao no eixo */
 
   var margemEsq=44, margemTopo=16, margemBaixo=26, margemDir=14;
@@ -142,7 +148,7 @@ export function renderPainelTempo(game){
       '<text x="'+xMedianaPx+'" y="'+(margemTopo-4)+'" fill="var(--ink-soft)" font-size="9.5" text-anchor="middle">tempo típico ('+medianaTempo.toFixed(0)+'s)</text>'+
       '<text x="'+(margemEsq+plotW)+'" y="'+(parseFloat(yLimitePx)-5)+'" fill="var(--ink-soft)" font-size="9.5" text-anchor="end">limite aceitável ('+ENGINE_PERDA_ACEITAVEL+'cp)</text>'+
       '<text x="'+margemEsq+'" y="'+(alturaTotal-6)+'" fill="var(--ink-soft)" font-size="10">0s</text>'+
-      '<text x="'+(margemEsq+plotW)+'" y="'+(alturaTotal-6)+'" fill="var(--ink-soft)" font-size="10" text-anchor="end">'+tempoTeto.toFixed(0)+'s</text>'+
+      '<text x="'+(margemEsq+plotW)+'" y="'+(alturaTotal-6)+'" fill="var(--ink-soft)" font-size="10" text-anchor="end">'+tempoTeto.toFixed(0)+'s'+(eixoCortado?'+':'')+'</text>'+
       '<text x="'+(margemEsq-6)+'" y="'+(margemTopo+plotH)+'" fill="var(--ink-soft)" font-size="10" text-anchor="end">0cp</text>'+
       '<text x="'+(margemEsq-6)+'" y="'+(margemTopo+8)+'" fill="var(--ink-soft)" font-size="10" text-anchor="end">'+PERDA_TETO+'cp+</text>'+
       pontosSvg+
