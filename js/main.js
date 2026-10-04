@@ -6,6 +6,7 @@ import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { renderRevisar, sincronizarControlesMotor } from './revisao.js';
 import { MOTOR_PRESETS, state } from './state.js';
 import { showToast, soltarFocoAposClique, tecladoDeTablist, todayStr, wrapArray } from './utils.js';
+import { fecharPopovers, iniciarUI } from './ui.js';
 import './pgn.js';
 
 export function showFatalBanner(msg){
@@ -93,6 +94,7 @@ function montarConfigMotor(){
 export function switchTab(name){
   var mudou = state.activeTab!==name;
   state.activeTab = name;
+  fecharPopovers(); /* menu aberto numa aba nao fica aberto por cima da outra */
   if(mudou) window.scrollTo(0, 0); /* cada aba abre no topo, nao na rolagem da aba anterior */
   document.querySelectorAll('.tab-btn').forEach(function(btn){
     var ativo = btn.dataset.tab===name;
@@ -162,4 +164,5 @@ export async function initApp(){
 }
 
 montarConfigMotor();
+iniciarUI();
 initApp();

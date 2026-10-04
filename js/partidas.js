@@ -97,10 +97,6 @@ export function renderViewer(){
 
   wrap.innerHTML =
     '<div class="card viewer-card">'+
-      '<div class="viewer-top">'+
-        '<div id="ladoPickerWrap"></div>'+
-        '<input type="text" id="notaGeralInput" placeholder="Nota geral dessa partida (ex: senti dificuldade em finais de torre)" value="'+escapeHtml(game.notaGeral||'')+'">'+
-      '</div>'+
       '<div class="game-layout">'+
         '<div class="game-board-col">'+
           '<div class="player-strip" id="stripTop"></div>'+
@@ -121,11 +117,18 @@ export function renderViewer(){
             '<button class="side-tab" data-vtab="analise" role="tab" id="vtab-analise" aria-controls="vpane-analise" aria-selected="false" tabindex="-1">Análise</button>'+
             '<button class="side-tab" data-vtab="erro" role="tab" id="vtab-erro" aria-controls="vpane-erro" aria-selected="false" tabindex="-1">Erro</button>'+
             '<button class="side-tab" data-vtab="tempo" role="tab" id="vtab-tempo" aria-controls="vpane-tempo" aria-selected="false" tabindex="-1">Tempo</button>'+
+            '<button class="side-tab" data-vtab="info" role="tab" id="vtab-info" aria-controls="vpane-info" aria-selected="false" tabindex="-1">Info</button>'+
           '</div>'+
           '<div class="side-pane" data-pane="lances" role="tabpanel" id="vpane-lances" aria-labelledby="vtab-lances"><div class="movelist" id="movelistEl"></div></div>'+
           '<div class="side-pane" data-pane="analise" role="tabpanel" id="vpane-analise" aria-labelledby="vtab-analise"><div id="analiseMotorWrap"></div></div>'+
           '<div class="side-pane" data-pane="erro" role="tabpanel" id="vpane-erro" aria-labelledby="vtab-erro"><div class="quick-erro-panel" id="quickErroPanel"></div></div>'+
           '<div class="side-pane" data-pane="tempo" role="tabpanel" id="vpane-tempo" aria-labelledby="vtab-tempo"><div id="tempoAnaliseWrap"></div></div>'+
+          '<div class="side-pane info-pane" data-pane="info" role="tabpanel" id="vpane-info" aria-labelledby="vtab-info">'+
+            '<div id="ladoPickerWrap"></div>'+
+            '<label for="notaGeralInput">Nota geral dessa partida</label>'+
+            '<input type="text" id="notaGeralInput" placeholder="ex: senti dificuldade em finais de torre" value="'+escapeHtml(game.notaGeral||'')+'">'+
+            infoPartidaHTML(game)+
+          '</div>'+
         '</div></div>'+
       '</div>'+
     '</div>';
@@ -153,6 +156,22 @@ export function renderViewer(){
   stepTo(state.currentPly, true);
 }
 
+/* Dados da partida (aba Info). */
+function infoPartidaHTML(game){
+  var h = game.headers || {};
+  var linhas = [];
+  function add(rotulo, valor){ if(valor) linhas.push('<dt>'+rotulo+'</dt><dd>'+valor+'</dd>'); }
+  add('Brancas', escapeHtml((h.White||'') + (h.WhiteElo ? ' ('+h.WhiteElo+')' : '')));
+  add('Pretas', escapeHtml((h.Black||'') + (h.BlackElo ? ' ('+h.BlackElo+')' : '')));
+  add('Data', escapeHtml(h.Date||''));
+  add('Ritmo', escapeHtml(h.TimeControl||''));
+  add('Resultado', escapeHtml(h.Result||''));
+  add('Abertura', escapeHtml((h.ECO ? h.ECO+' ' : '') + (h.Opening||'')));
+  var url = h.Link || h.Site || '';
+  if(/^https?:\/\//.test(url)) add('Partida', '<a href="'+escapeHtml(url)+'" target="_blank" rel="noopener">abrir no site</a>');
+  return linhas.length ? '<dl class="game-meta">'+linhas.join('')+'</dl>' : '';
+}
+
 /* ---------- Painel lateral em abas ---------- */
 function aplicarAbaViewer(){
   document.querySelectorAll('[data-vtab]').forEach(function(b){
@@ -174,6 +193,11 @@ function atualizarRotulosAbas(game){
   }
   var tAn = document.querySelector('[data-vtab="analise"]');
   if(tAn) tAn.textContent = game.analiseMotor ? 'Análise ✓' : 'Análise';
+  var tInfo = document.querySelector('[data-vtab="info"]');
+  if(tInfo){
+    tInfo.textContent = game.meuLado ? 'Info' : 'Info ⚠';
+    tInfo.title = game.meuLado ? '' : 'Diga de que lado você jogou: o tabuleiro gira e o painel de erro usa isso';
+  }
 }
 
 /* Mantem o lance atual visivel dentro da lista, rolando so a lista (nunca a pagina). */

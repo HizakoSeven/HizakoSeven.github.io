@@ -327,13 +327,29 @@ function barraAvaliacaoHTML(b){
   '</div>';
 }
 
+/* Faixa do jogador acima/abaixo do tabuleiro (igual a da aba Partidas). Mesmo sem partida vinculada ela
+   ocupa o espaco, pra o tabuleiro ficar exatamente no mesmo lugar nas duas telas. */
+function faixaRevisaoHTML(cor){
+  var en = state.erros.find(function(e){ return e.id===state.revisao.atualId; });
+  var game = en && en.gameId ? state.partidas.find(function(g){ return g.id===en.gameId; }) : null;
+  if(!game) return '<div class="player-strip"></div>';
+  var h = game.headers || {};
+  var nome = (cor==='w' ? h.White : h.Black) || (cor==='w' ? 'Brancas' : 'Pretas');
+  var elo = cor==='w' ? h.WhiteElo : h.BlackElo;
+  return '<div class="player-strip"><span class="ps-dot ps-'+cor+'"></span><span class="ps-name">'+escapeHtml(nome)+'</span>'+
+    (elo ? '<span class="ps-elo">'+escapeHtml(elo)+'</span>' : '')+
+    (game.meuLado===cor ? '<span class="ps-me">você</span>' : '')+'</div>';
+}
+
 function blocoTabuleiro(classeExtra, squaresHtml, setas, barra, flipped){
   /* a barra de avaliacao aparece so depois da tentativa; o espaco dela e sempre reservado
      pra o tabuleiro nao mudar de tamanho nem de lugar */
-  return '<div class="board-row">'+
-    (barra ? barraAvaliacaoHTML(barra) : '<div class="vbar-ph"></div>')+
-    '<div class="board-wrap"><div class="board'+classeExtra+'">'+squaresHtml+'</div>'+setasSVG(setas, flipped)+'</div>'+
-  '</div>';
+  return faixaRevisaoHTML(flipped ? 'w' : 'b')+
+    '<div class="board-row">'+
+      (barra ? barraAvaliacaoHTML(barra) : '<div class="vbar-ph"></div>')+
+      '<div class="board-wrap"><div class="board'+classeExtra+'">'+squaresHtml+'</div>'+setasSVG(setas, flipped)+'</div>'+
+    '</div>'+
+    faixaRevisaoHTML(flipped ? 'b' : 'w');
 }
 
 /* Estrutura comum: [tabuleiro | painel com rolagem interna + botoes de acao fixos no fundo] */

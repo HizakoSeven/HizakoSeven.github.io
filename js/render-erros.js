@@ -269,7 +269,13 @@ export function renderErros(){
         '</div>'+
         (boardAberto ? renderErroBoardHTML(en, gameRef) : '');
     }
-    return '<div class="erro-card tipo-'+en.tipo+'" id="errocard-'+en.id+'">'+corpo+'</div>';
+    var conteudo = corpo;
+    if(!editando && boardAberto){
+      /* o tabuleiro aberto usa o MESMO tamanho das outras telas e fica a direita; o texto se adapta */
+      var boardHtml = renderErroBoardHTML(en, gameRef);
+      conteudo = '<div class="erro-card-grid"><div class="ecg-main">'+corpo.replace(boardHtml, '')+'</div><div class="ecg-board">'+boardHtml+'</div></div>';
+    }
+    return '<div class="erro-card tipo-'+en.tipo+'" id="errocard-'+en.id+'">'+conteudo+'</div>';
   }).join('');
 
   wrap.querySelectorAll('[data-revisaragora]').forEach(function(btn){
