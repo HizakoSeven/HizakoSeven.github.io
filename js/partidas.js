@@ -2,11 +2,11 @@
 import { cancelarAnaliseCompleta, clkParaSegundos, iniciarAnaliseCompleta, mapClasseParaTipo } from './analysis.js';
 import { boardSquaresHTML } from './board.js';
 import { persist } from './persistence.js';
-import { collectErroEditValues, erroEditFieldsHTML, renderErros, tipoLabel } from './render-erros.js';
+import { atualizarTelasDeErros, collectErroEditValues, erroEditFieldsHTML, removerErro, renderErros, tipoLabel } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { MOTOR_PRESETS, state } from './state.js';
-import { renderPainelTempo } from './tempo.js';
-import { escapeHtml, formatPtDate, showToast, todayStr } from './utils.js';
+import { parseTimeControlSeconds, renderPainelTempo } from './tempo.js';
+import { escapeHtml, formatPtDate, showToast, soltarFocoAposClique, tecladoDeTablist, todayStr } from './utils.js';
 
 /* Qual (partida, lance) o painel de registro rapido esta mostrando. Evita reconstruir o painel
    (e apagar o que a pessoa digitou) quando nada mudou - ex.: ao girar o tabuleiro. */
@@ -60,10 +60,9 @@ export function renderPartidas(){
       if(!confirm('Remover essa partida do caderno?')) return;
       state.partidas = state.partidas.filter(function(x){ return x.id!==btn.dataset.delgame; });
       if(state.openGameId===btn.dataset.delgame){ state.openGameId=null; }
-      await persist();
       renderPartidas();
-      renderHeaderStats();
-      renderHoje();
+      atualizarTelasDeErros(); /* os erros dessa partida passam a "partida removida" na hora */
+      await persist();
     });
   });
 
@@ -117,16 +116,16 @@ export function renderViewer(){
           '<div class="move-status" id="moveStatus"></div>'+
         '</div>'+
         '<div class="game-side"><div class="game-side-inner">'+
-          '<div class="side-tabs" role="tablist">'+
-            '<button class="side-tab" data-vtab="lances" role="tab">Lances</button>'+
-            '<button class="side-tab" data-vtab="analise" role="tab">Análise</button>'+
-            '<button class="side-tab" data-vtab="erro" role="tab">Erro</button>'+
-            '<button class="side-tab" data-vtab="tempo" role="tab">Tempo</button>'+
+          '<div class="side-tabs" role="tablist" aria-label="Painel da partida">'+
+            '<button class="side-tab" data-vtab="lances" role="tab" id="vtab-lances" aria-controls="vpane-lances" aria-selected="false" tabindex="-1">Lances</button>'+
+            '<button class="side-tab" data-vtab="analise" role="tab" id="vtab-analise" aria-controls="vpane-analise" aria-selected="false" tabindex="-1">Análise</button>'+
+            '<button class="side-tab" data-vtab="erro" role="tab" id="vtab-erro" aria-controls="vpane-erro" aria-selected="false" tabindex="-1">Erro</button>'+
+            '<button class="side-tab" data-vtab="tempo" role="tab" id="vtab-tempo" aria-controls="vpane-tempo" aria-selected="false" tabindex="-1">Tempo</button>'+
           '</div>'+
-          '<div class="side-pane" data-pane="lances"><div class="movelist" id="movelistEl"></div></div>'+
-          '<div class="side-pane" data-pane="analise"><div id="analiseMotorWrap"></div></div>'+
-          '<div class="side-pane" data-pane="erro"><div class="quick-erro-panel" id="quickErroPanel"></div></div>'+
-          '<div class="side-pane" data-pane="tempo"><div id="tempoAnaliseWrap"></div></div>'+
+          '<div class="side-pane" data-pane="lances" role="tabpanel" id="vpane-lances" aria-labelledby="vtab-lances"><div class="movelist" id="movelistEl"></div></div>'+
+          '<div class="side-pane" data-pane="analise" role="tabpanel" id="vpane-analise" aria-labelledby="vtab-analise"><div id="analiseMotorWrap"></div></div>'+
+          '<div class="side-pane" data-pane="erro" role="tabpanel" id="vpane-erro" aria-labelledby="vtab-erro"><div class="quick-erro-panel" id="quickErroPanel"></div></div>'+
+          '<div class="side-pane" data-pane="tempo" role="tabpanel" id="vpane-tempo" aria-labelledby="vtab-tempo"><div id="tempoAnaliseWrap"></div></div>'+
         '</div></div>'+
       '</div>'+
     '</div>';
@@ -141,8 +140,9 @@ export function renderViewer(){
     await persist();
   });
   wrap.querySelectorAll('[data-vtab]').forEach(function(btn){
-    btn.addEventListener('click', function(){ viewerTab = btn.dataset.vtab; aplicarAbaViewer(); });
+    btn.addEventListener('click', function(e){ viewerTab = btn.dataset.vtab; aplicarAbaViewer(); soltarFocoAposClique(e); });
   });
+  tecladoDeTablist(wrap.querySelector('.side-tabs'), '.side-tab', function(btn){ viewerTab = btn.dataset.vtab; aplicarAbaViewer(); });
 
   renderLadoPicker(game);
   renderMovelist(game);
@@ -155,7 +155,12 @@ export function renderViewer(){
 
 /* ---------- Painel lateral em abas ---------- */
 function aplicarAbaViewer(){
-  document.querySelectorAll('[data-vtab]').forEach(function(b){ b.classList.toggle('active', b.dataset.vtab===viewerTab); });
+  document.querySelectorAll('[data-vtab]').forEach(function(b){
+    var ativo = b.dataset.vtab===viewerTab;
+    b.classList.toggle('active', ativo);
+    b.setAttribute('aria-selected', ativo ? 'true' : 'false');
+    b.tabIndex = ativo ? 0 : -1;
+  });
   document.querySelectorAll('[data-pane]').forEach(function(p){ p.classList.toggle('active', p.dataset.pane===viewerTab); });
   if(viewerTab==='lances') centralizarLanceAtual();
 }
@@ -181,17 +186,24 @@ function centralizarLanceAtual(){
 }
 
 /* ---------- Faixas de jogador (nome, rating, relogio), como Chess.com ---------- */
+function formatarRelogio(seg){
+  var hh = Math.floor(seg/3600), mm = Math.floor((seg%3600)/60), ss = Math.floor(seg%60);
+  return hh>0 ? hh+':'+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0') : mm+':'+String(ss).padStart(2,'0');
+}
+
 function relogioDe(game, ply, cor){
   for(var p=ply;p>=1;p--){
     var m = game.applied[p-1];
     if(m && m.color===cor && m.clk){
       var seg = clkParaSegundos(m.clk);
-      if(seg===null) return '';
-      var hh = Math.floor(seg/3600), mm = Math.floor((seg%3600)/60), ss = Math.floor(seg%60);
-      return hh>0 ? hh+':'+String(mm).padStart(2,'0')+':'+String(ss).padStart(2,'0') : mm+':'+String(ss).padStart(2,'0');
+      return seg===null ? '' : formatarRelogio(seg);
     }
   }
-  return '';
+  /* esse lado ainda nao jogou: mostra o tempo inicial do controle - mas so se a partida
+     tem dado de relogio, senao ficaria um "10:00" parado e enganoso */
+  if(!game.applied.some(function(m){ return m.clk; })) return '';
+  var tc = parseTimeControlSeconds(game.headers && game.headers.TimeControl);
+  return tc ? formatarRelogio(tc.baseSec) : '';
 }
 
 function renderStrips(game, ply){
@@ -209,6 +221,18 @@ function renderStrips(game, ply){
   if(base) base.innerHTML = html(state.boardFlipped ? 'b' : 'w');
 }
 
+/* Define de que lado voce jogou: gira o tabuleiro (seu lado embaixo) e repinta tudo que depende disso
+   (faixas "voce", painel de erro, grafico de tempo, que so mostra os seus lances). */
+function aplicarMeuLado(game, lado){
+  game.meuLado = lado;
+  if(lado) state.boardFlipped = lado==='b';
+  renderLadoPicker(game);
+  renderQuickErroPanel(game);
+  renderPainelTempo(game);
+  stepTo(state.currentPly, true);
+  return persist();
+}
+
 export function renderLadoPicker(game){
   var wrap = document.getElementById('ladoPickerWrap');
   if(!wrap) return;
@@ -217,10 +241,7 @@ export function renderLadoPicker(game){
     var link = document.getElementById('trocarLadoLink');
     if(link) link.addEventListener('click', function(e){
       e.preventDefault();
-      game.meuLado = null;
-      persist();
-      renderLadoPicker(game);
-      renderQuickErroPanel(game);
+      aplicarMeuLado(game, null);
     });
   } else {
     wrap.innerHTML = '<div class="btn-row" style="margin:4px 0 12px;align-items:center;">'+
@@ -228,12 +249,8 @@ export function renderLadoPicker(game){
       '<button class="btn btn-ghost btn-sm" id="ladoBrancasBtn">Brancas</button>'+
       '<button class="btn btn-ghost btn-sm" id="ladoPretasBtn">Pretas</button>'+
     '</div>';
-    document.getElementById('ladoBrancasBtn').addEventListener('click', async function(){
-      game.meuLado = 'w'; await persist(); renderLadoPicker(game); renderQuickErroPanel(game);
-    });
-    document.getElementById('ladoPretasBtn').addEventListener('click', async function(){
-      game.meuLado = 'b'; await persist(); renderLadoPicker(game); renderQuickErroPanel(game);
-    });
+    document.getElementById('ladoBrancasBtn').addEventListener('click', function(){ aplicarMeuLado(game, 'w'); });
+    document.getElementById('ladoPretasBtn').addEventListener('click', function(){ aplicarMeuLado(game, 'b'); });
   }
 }
 
@@ -274,12 +291,7 @@ export async function registrarErroDireto(game, ply){
   });
   /* atualiza a tela NA HORA (otimista) e so depois grava; a gravacao pode demorar */
   showToast('Erro registrado: '+label+'.');
-  renderAnaliseMotorUI(game);
-  renderMovelist(game);
-  renderQuickErroPanel(game);
-  renderErros();
-  renderHeaderStats();
-  renderHoje();
+  atualizarTelasDeErros();
   await persist();
   return true;
 }
@@ -418,6 +430,7 @@ export function motorFlagHTML(game, ply){
 
 export function renderMovelist(game){
   var el = document.getElementById('movelistEl');
+  if(!el) return;
   var loggedPlies = {};
   state.erros.forEach(function(e){ if(e.gameId===game.id && e.ply){ loggedPlies[e.ply] = true; } });
   var rows = [];
@@ -436,6 +449,7 @@ export function renderMovelist(game){
   }
   el.innerHTML = rows.join('');
   el.querySelectorAll('.move-btn').forEach(function(btn){
+    btn.classList.toggle('current', parseInt(btn.dataset.ply,10)===state.currentPly); /* repintar nao pode apagar o destaque */
     btn.addEventListener('click', function(){ stepTo(parseInt(btn.dataset.ply,10)); });
   });
 }
@@ -543,14 +557,10 @@ export function renderQuickErroPanel(game){
     });
     document.getElementById('qeRemoveExistingBtn').addEventListener('click', async function(){
       if(!confirm('Remover esse erro registrado?')) return;
-      state.erros = state.erros.filter(function(x){ return x.id!==existing.id; });
-      await persist();
+      removerErro(existing.id);
       showToast('Erro removido.');
-      renderErros();
-      renderHeaderStats();
-      renderHoje();
-      renderMovelist(game);
-      renderQuickErroPanel(game);
+      atualizarTelasDeErros(); /* some da lista de lances, do caderno e da fila de revisao na hora */
+      await persist();
     });
     return;
   }
@@ -573,15 +583,11 @@ export function renderQuickErroPanel(game){
         state.erros[idx].lance = vals.lance;
         state.erros[idx].motivo = vals.motivo;
         state.erros[idx].padrao = vals.padrao;
-        await persist();
         showToast('Alterações salvas.');
       }
       state.editingErroId = null;
-      renderErros();
-      renderHeaderStats();
-      renderHoje();
-      renderMovelist(game);
-      renderQuickErroPanel(game);
+      atualizarTelasDeErros();
+      if(idx>-1) await persist();
     });
     document.getElementById('qeCancelEditBtn').addEventListener('click', function(){
       state.editingErroId = null;
@@ -664,11 +670,8 @@ export function renderQuickErroPanel(game){
   var saveNextBtn = document.getElementById('qeSaveNextBtn');
   if(saveNextBtn) saveNextBtn.addEventListener('click', async function(){
     if(ply===0){ showToast('Ande pelo menos um lance antes de registrar.'); return; }
-    await montarEntrySalvar();
-    renderErros();
-    renderHeaderStats();
-    renderHoje();
-    renderMovelist(game);
+    var gravando = montarEntrySalvar();
+    atualizarTelasDeErros();
     if(game.analiseMotor){
       var proximoPly = proximoPlyComErroPendente(game, ply);
       if(proximoPly!==null){
@@ -682,17 +685,17 @@ export function renderQuickErroPanel(game){
       showToast('Erro registrado — indo pro próximo lance.');
       stepTo(Math.min(game.fens.length-1, ply+1));
     }
+    await gravando;
   });
 
   var saveCloseBtn = document.getElementById('qeSaveCloseBtn');
   if(saveCloseBtn) saveCloseBtn.addEventListener('click', async function(){
     if(ply===0){ showToast('Ande pelo menos um lance antes de registrar.'); return; }
-    await montarEntrySalvar();
+    var gravandoFechar = montarEntrySalvar();
     showToast('Erro registrado.');
-    renderErros();
-    renderHeaderStats();
-    renderHoje();
+    atualizarTelasDeErros();
     closeGame();
+    await gravandoFechar;
   });
 }
 

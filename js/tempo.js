@@ -8,7 +8,7 @@ import { stepTo } from './partidas.js';
 import { ENGINE_PERDA_ACEITAVEL } from './revisao.js';
 import { escapeHtml } from './utils.js';
 
-function parseTimeControlSeconds(tc){
+export function parseTimeControlSeconds(tc){
   if(!tc) return null;
   var m = String(tc).match(/^(\d+)(?:\+(\d+))?$/);
   if(!m) return null;

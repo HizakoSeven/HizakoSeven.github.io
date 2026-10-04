@@ -41,3 +41,32 @@ export function showToast(msg){
   clearTimeout(toastTimer);
   toastTimer = setTimeout(function(){ el.hidden = true; }, 2600);
 }
+
+/* Navegacao por teclado de um tablist (padrao ARIA): setas/Home/End movem o foco e ativam a aba.
+   Para a propagacao de proposito: sem isso o atalho global de setas (navegar lances) dispararia junto. */
+export function tecladoDeTablist(tablist, seletorAba, aoAtivar){
+  if(!tablist) return;
+  tablist.addEventListener('keydown', function(e){
+    if(e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+    var abas = wrapArray(tablist.querySelectorAll(seletorAba));
+    var atual = e.target && e.target.closest ? e.target.closest(seletorAba) : null;
+    var i = abas.indexOf(atual);
+    if(i===-1) return;
+    var n = abas.length, destino;
+    if(e.key==='ArrowRight') destino = (i+1)%n;
+    else if(e.key==='ArrowLeft') destino = (i-1+n)%n;
+    else if(e.key==='Home') destino = 0;
+    else if(e.key==='End') destino = n-1;
+    else return;
+    e.preventDefault();
+    e.stopPropagation();
+    abas[destino].focus();
+    aoAtivar(abas[destino]);
+  });
+}
+
+/* Depois de clicar numa aba com o mouse, solta o foco: assim as setas voltam a navegar os lances.
+   Ativada pelo teclado (detail===0) o foco fica, como manda o padrao ARIA. */
+export function soltarFocoAposClique(e){
+  if(e && e.detail>0 && e.currentTarget && e.currentTarget.blur) e.currentTarget.blur();
+}

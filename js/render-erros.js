@@ -1,6 +1,7 @@
 /* Caderno de erros: formulario, filtros, listagem. */
 import { boardSquaresHTML } from './board.js';
 import { switchTab } from './main.js';
+import { renderAnaliseMotorUI, renderMovelist, renderQuickErroPanel } from './partidas.js';
 import { persist } from './persistence.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { REVISAO_ACERTOS_PARA_DOMINAR, renderRevisar, resetRevisaoInterativa } from './revisao.js';
@@ -11,6 +12,34 @@ import { addDaysStr, escapeHtml, formatPtDate, showToast, todayStr } from './uti
 export var erroForm = document.getElementById('erroForm');
 
 document.getElementById('erroData').value = todayStr();
+
+/* Tira o erro do caderno e limpa tudo que apontava pra ele (revisao em andamento, tabuleiro aberto, edicao). */
+export function removerErro(id){
+  state.erros = state.erros.filter(function(x){ return x.id!==id; });
+  if(state.revisao.atualId===id){
+    state.revisao.atualId = null; /* renderRevisar escolhe o proximo da fila */
+    state.revisao.revelado = false;
+    resetRevisaoInterativa();
+  }
+  if(state.openErroBoardId===id) state.openErroBoardId = null;
+  if(state.editingErroId===id) state.editingErroId = null;
+}
+
+/* Repinta TUDO que depende da lista de erros: caderno, contadores, aba Hoje, fila de revisao e,
+   se houver partida aberta, a lista de lances (marca "●"), a aba Analise e o painel de erro.
+   Chamar logo depois de mudar state.erros, ANTES de gravar - a gravacao pode demorar. */
+export function atualizarTelasDeErros(){
+  renderErros();
+  renderHeaderStats();
+  renderHoje();
+  renderRevisar();
+  var game = state.openGameId ? state.partidas.find(function(g){ return g.id===state.openGameId; }) : null;
+  if(game && document.getElementById('movelistEl')){
+    renderMovelist(game);
+    renderAnaliseMotorUI(game);
+    renderQuickErroPanel(game);
+  }
+}
 
 export function erroEditFieldsHTML(prefix, en){
   return '<div class="field-row">'+
@@ -72,12 +101,10 @@ erroForm.addEventListener('submit', async function(e){
     ultimaRevisaoEm: null
   };
   state.erros.unshift(entry);
-  await persist();
   showToast('Erro adicionado ao caderno.');
   openErroForm();
-  renderErros();
-  renderHeaderStats();
-  renderHoje();
+  atualizarTelasDeErros();
+  await persist();
 });
 
 export function renderErroBoardHTML(en, game){
@@ -310,23 +337,19 @@ export function renderErros(){
         state.erros[idx].motivo = vals.motivo;
         state.erros[idx].padrao = vals.padrao;
         /* criadoEm nao muda - mantem a posicao na lista, ordenada por quando foi criado */
-        await persist();
         showToast('Alterações salvas.');
       }
       state.editingErroId = null;
-      renderErros();
-      renderHeaderStats();
-      renderHoje();
+      atualizarTelasDeErros(); /* na hora; a gravacao vem depois */
+      if(idx>-1) await persist();
     });
   });
   wrap.querySelectorAll('[data-del]').forEach(function(btn){
     btn.addEventListener('click', async function(){
       if(!confirm('Remover esse registro do caderno de erros?')) return;
-      state.erros = state.erros.filter(function(x){ return x.id!==btn.dataset.del; });
+      removerErro(btn.dataset.del);
+      atualizarTelasDeErros(); /* some da tela, da fila de revisao e da partida na hora */
       await persist();
-      renderErros();
-      renderHeaderStats();
-      renderHoje();
     });
   });
 }

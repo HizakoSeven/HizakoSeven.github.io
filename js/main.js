@@ -5,7 +5,7 @@ import { openErroForm, renderErros } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { renderRevisar, sincronizarControlesMotor } from './revisao.js';
 import { MOTOR_PRESETS, state } from './state.js';
-import { showToast, todayStr, wrapArray } from './utils.js';
+import { showToast, soltarFocoAposClique, tecladoDeTablist, todayStr, wrapArray } from './utils.js';
 import './pgn.js';
 
 export function showFatalBanner(msg){
@@ -31,6 +31,8 @@ window.addEventListener('unhandledrejection', function(e){
 document.getElementById('meuNickInput').addEventListener('change', async function(e){
   state.meuNick = e.target.value.trim();
   backfillMeuLado();
+  var gAberto = state.partidas.find(function(g){ return g.id===state.openGameId; });
+  if(gAberto && gAberto.meuLado) state.boardFlipped = gAberto.meuLado==='b'; /* seu lado embaixo */
   await persist();
   renderPartidas();
   if(state.openGameId) renderViewer();
@@ -93,7 +95,10 @@ export function switchTab(name){
   state.activeTab = name;
   if(mudou) window.scrollTo(0, 0); /* cada aba abre no topo, nao na rolagem da aba anterior */
   document.querySelectorAll('.tab-btn').forEach(function(btn){
-    btn.classList.toggle('active', btn.dataset.tab===name);
+    var ativo = btn.dataset.tab===name;
+    btn.classList.toggle('active', ativo);
+    btn.setAttribute('aria-selected', ativo ? 'true' : 'false');
+    btn.tabIndex = ativo ? 0 : -1;
   });
   document.querySelectorAll('.tab-panel').forEach(function(panel){
     panel.classList.toggle('active', panel.id==='tab-'+name);
@@ -101,8 +106,9 @@ export function switchTab(name){
 }
 
 document.querySelectorAll('.tab-btn').forEach(function(btn){
-  btn.addEventListener('click', function(){ switchTab(btn.dataset.tab); });
+  btn.addEventListener('click', function(e){ switchTab(btn.dataset.tab); soltarFocoAposClique(e); });
 });
+tecladoDeTablist(document.querySelector('nav.tabs'), '.tab-btn', function(btn){ switchTab(btn.dataset.tab); });
 
 export async function initApp(){
   definirModoServidorLocal(await detectarServidorLocal());

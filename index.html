@@ -358,9 +358,11 @@
     --topbar-h:52px;
     --strip-h:30px;
     /* UM tamanho de tabuleiro para o app todo: cabe na altura da janela, sem pular entre telas */
-    --board-size:max(300px, min(600px, calc(100vh - 260px), calc(100vw - 66px)));
+    --vh100:100vh;
+    --board-size:max(240px, min(600px, calc(var(--vh100) - 260px), calc(100vw - 66px)));
     --board-size-sm:min(360px, calc(100vw - 56px));
   }
+  @supports (height:100dvh){ :root{ --vh100:100dvh; } } /* celular: a barra de endereco nao faz o tabuleiro pular */
   .app{max-width:1180px;padding-top:var(--sp-4);}
 
   /* barra do topo fixa: a navegacao nunca sai da tela */
@@ -502,12 +504,12 @@
   <div class="rank-strip" aria-hidden="true"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
   <div class="topbar-in">
     <div class="brand"><span class="brand-mark" aria-hidden="true">♞</span><span class="brand-name">Caderno de Xadrez</span></div>
-    <nav class="tabs" role="tablist">
-      <button class="tab-btn active" data-tab="hoje" role="tab">Hoje</button>
-      <button class="tab-btn" data-tab="plano" role="tab">Plano</button>
-      <button class="tab-btn" data-tab="erros" role="tab">Caderno de Erros</button>
-      <button class="tab-btn" data-tab="revisar" role="tab">Revisar</button>
-      <button class="tab-btn" data-tab="partidas" role="tab">Partidas</button>
+    <nav class="tabs" role="tablist" aria-label="Seções do caderno">
+      <button class="tab-btn active" data-tab="hoje" role="tab" id="tabbtn-hoje" aria-controls="tab-hoje" aria-selected="true" tabindex="0">Hoje</button>
+      <button class="tab-btn" data-tab="plano" role="tab" id="tabbtn-plano" aria-controls="tab-plano" aria-selected="false" tabindex="-1">Plano</button>
+      <button class="tab-btn" data-tab="erros" role="tab" id="tabbtn-erros" aria-controls="tab-erros" aria-selected="false" tabindex="-1">Caderno de Erros</button>
+      <button class="tab-btn" data-tab="revisar" role="tab" id="tabbtn-revisar" aria-controls="tab-revisar" aria-selected="false" tabindex="-1">Revisar</button>
+      <button class="tab-btn" data-tab="partidas" role="tab" id="tabbtn-partidas" aria-controls="tab-partidas" aria-selected="false" tabindex="-1">Partidas</button>
     </nav>
     <p class="stats-mini" id="statsMini">carregando estatísticas…</p>
     <p class="storage-status" id="storageStatus" style="display:none;"></p>
@@ -518,7 +520,7 @@
 
   <main>
 
-    <section id="tab-hoje" class="tab-panel active">
+    <section id="tab-hoje" class="tab-panel active" role="tabpanel" aria-labelledby="tabbtn-hoje">
     <div class="hoje-grid"><div class="hoje-col">
       <div class="today-focus">
         <div class="day-label" id="hojeDayLabel">—</div>
@@ -554,7 +556,7 @@
     </div></div>
     </section>
 
-    <section id="tab-plano" class="tab-panel">
+    <section id="tab-plano" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-plano">
       <div class="card">
         <h2>Plano de Estudo</h2>
         <p class="lede">Referência completa — tática, finais, aberturas e metas. O dia a dia mora na aba Hoje; aqui fica o porquê.</p>
@@ -724,7 +726,7 @@
       </details>
     </section>
 
-    <section id="tab-erros" class="tab-panel">
+    <section id="tab-erros" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-erros">
       <div class="card">
         <h2>Caderno de Erros</h2>
         <p class="lede">Revise essa lista todo domingo. Pra registrar a partir de uma partida, use a aba Partidas — aqui é só pra notas soltas.</p>
@@ -789,7 +791,7 @@
       <div id="errosListWrap"></div>
     </section>
 
-    <section id="tab-revisar" class="tab-panel">
+    <section id="tab-revisar" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-revisar">
       <div class="card card-compact">
         <div class="rev-head-row">
           <h2>Revisão espaçada</h2>
@@ -802,7 +804,7 @@
         <div class="rev-tools">
         <details class="mini-details">
           <summary>Como funciona</summary>
-          <p class="lede" style="margin:6px 0 0;">Resolva de novo as posições exatas onde você já errou. Com tabuleiro, o motor confirma se o seu lance está bom; sem tabuleiro, você se auto-avalia. Acerte <strong>3 vezes seguidas</strong> pra tirar um erro da fila — se errar de novo, ele volta com o contador zerado.</p>
+          <p class="lede" style="margin:6px 0 0;">Resolva de novo as posições exatas onde você já errou. Com tabuleiro, o motor confirma se o seu lance está bom; sem tabuleiro, você se auto-avalia. Acerte <strong>3 vezes, em dias diferentes</strong>: o erro volta em 2 dias, depois em 7, e então sai da fila. Errar zera o contador e ele volta amanhã. Treinar antes da data é só prática — não avança.</p>
         </details>
         <div class="motor-config-slot"></div>
         </div>
@@ -810,7 +812,7 @@
       <div id="revisarWrap"></div>
     </section>
 
-    <section id="tab-partidas" class="tab-panel">
+    <section id="tab-partidas" class="tab-panel" role="tabpanel" aria-labelledby="tabbtn-partidas">
       <details id="importDetails" class="import-details" open>
         <summary>Importar partidas (PGN)</summary>
         <div class="details-body">
@@ -837,7 +839,7 @@
   </main>
 
   <footer>
-    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 10</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
+    <span>Feito pra sua evolução no xadrez · <span title="versão do código (ajuda a conferir se o cache atualizou)">build 11</span> · Motor: <a href="https://stockfishchess.org/" target="_blank" rel="noopener">Stockfish</a> (GPLv3) · Regras: <a href="https://github.com/jhlywa/chess.js" target="_blank" rel="noopener">chess.js</a> · <a href="https://github.com/HizakoSeven/HizakoSeven.github.io" target="_blank" rel="noopener">Código-fonte</a></span>
     <div class="footer-nick">Seu nick no Chess.com/Lichess: <input type="text" id="meuNickInput" value="" placeholder="seu nick"> <span>(usado pra saber de que lado você jogou, sozinho)</span></div>
     <div class="save-bar" style="margin:8px 0 0;font-size:12px;">
       <span class="save-bar-group-label">Backup:</span>
