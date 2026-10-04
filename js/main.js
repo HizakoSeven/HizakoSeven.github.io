@@ -5,6 +5,7 @@ import { openErroForm, renderErros } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { renderRevisar, sincronizarControlesMotor } from './revisao.js';
 import { MOTOR_PRESETS, state } from './state.js';
+import { iniciarSync, iniciarSyncAutomatico, renderBarraSync, renderControlesSync } from './sync.js';
 import { showToast, soltarFocoAposClique, tecladoDeTablist, todayStr, wrapArray } from './utils.js';
 import { fecharPopovers, iniciarUI } from './ui.js';
 import './pgn.js';
@@ -31,6 +32,7 @@ window.addEventListener('unhandledrejection', function(e){
 
 /* Grava o nick (menu Opcoes ou pergunta inicial): detecta o lado das partidas e gira o tabuleiro aberto. */
 async function salvarNick(valor){
+  var nickAnterior = state.meuNick || '';
   state.meuNick = (valor||'').trim();
   document.getElementById('meuNickInput').value = state.meuNick;
   backfillMeuLado();
@@ -40,6 +42,9 @@ async function salvarNick(valor){
   renderPartidas();
   if(state.openGameId) renderViewer();
   showToast('Nick atualizado.');
+  renderBarraSync();
+  /* nick novo: busca as partidas dele logo (sem await; a sync cuida dos proprios erros) */
+  if(state.meuNick && state.meuNick.toLowerCase()!==nickAnterior.toLowerCase()) iniciarSyncAutomatico();
 }
 
 document.getElementById('meuNickInput').addEventListener('change', function(e){ salvarNick(e.target.value); });
@@ -188,6 +193,8 @@ export async function initApp(){
   backfillMeuLado();
   document.getElementById('meuNickInput').value = state.meuNick || '';
   sincronizarControlesMotor();
+  renderControlesSync();
+  renderBarraSync();
   renderHeaderStats();
   renderHoje();
   renderErros();
@@ -197,8 +204,10 @@ export async function initApp(){
 
   document.getElementById('loadingOverlay').style.display = 'none';
   pedirNickSeNecessario();
+  iniciarSyncAutomatico(); /* em segundo plano, sem await: nao trava a tela */
 }
 
 montarConfigMotor();
 iniciarUI();
+iniciarSync();
 initApp();

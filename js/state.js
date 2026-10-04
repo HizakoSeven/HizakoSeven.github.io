@@ -20,6 +20,17 @@ export var state = {
   storageOk: false,
   revisao: { atualId:null, revelado:false },
   revisaoInterativa: { selecionada:null, destinos:[], promocaoPendente:null, avaliando:false, refInfo:null, refLinhas:null, refBestUci:null, resultado:null, jaContado:false, cursorPly:null, timeline:'jogo', linhaMotor:null, animarProximaRenderizacao:true },
+  sync: {
+    auto: true,
+    ultimaSyncEm: null,
+    ultimoResumo: null,
+    primeiraConcluida: false,
+    filtros: { modalidades: ['rapid'], periodoInicialDias: 30 },
+    filtrosAplicados: null,
+    nickAplicado: null,
+    ultimoErro: null,
+    ignorados: []
+  },
   analiseEmAndamento: null,
   motorConfig: { multiPv:1, movetimeMs:1200, hashMb:16, movetimeAnaliseMs:400, depthAnalise:20 }
 };
