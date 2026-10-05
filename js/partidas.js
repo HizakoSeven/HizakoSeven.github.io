@@ -3,6 +3,7 @@ import { cancelarAnaliseCompleta, clkParaSegundos, iniciarAnaliseCompleta, mapCl
 import { boardSquaresHTML } from './board.js';
 import { adicionarIgnorado, chavePartida } from './dedupe.js';
 import { fraseDesfecho, rotuloModalidade, urlChesscomSegura } from './fonte-chesscom.js';
+import { atualizarVisualPosicao, cancelarVisual, ligarControlesVis } from './posicao-visual.js';
 import { persist } from './persistence.js';
 import { atualizarTelasDeErros, collectErroEditValues, erroEditFieldsHTML, removerErro, renderErros, tipoLabel } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
@@ -99,6 +100,7 @@ export function openGame(id){
 }
 
 export function closeGame(){
+  cancelarVisual();
   state.openGameId = null;
   renderPartidas();
 }
@@ -114,7 +116,10 @@ export function renderViewer(){
       '<div class="game-layout">'+
         '<div class="game-board-col">'+
           '<div class="player-strip" id="stripTop"></div>'+
-          '<div class="board-wrap"><div class="board" id="boardEl"></div></div>'+
+          '<div class="board-row">'+
+            '<div class="vbar-slot" id="vbarSlot"></div>'+
+            '<div class="board-wrap"><div class="board" id="boardEl"></div><div id="setasSlot"></div></div>'+
+          '</div>'+
           '<div class="player-strip" id="stripBottom"></div>'+
           '<div class="board-controls">'+
             '<button class="btn btn-ghost btn-sm" id="stepFirst" title="Início (Home)">⏮</button>'+
@@ -122,6 +127,8 @@ export function renderViewer(){
             '<button class="btn btn-ghost btn-sm" id="stepNext" title="Próximo lance (→)">▶</button>'+
             '<button class="btn btn-ghost btn-sm" id="stepLast" title="Fim (End)">⏭</button>'+
             '<button class="btn btn-ghost btn-sm" id="flipBtn" title="Girar tabuleiro">⇅ Girar</button>'+
+            '<button class="btn btn-ghost btn-sm" id="setasBtn" aria-pressed="true"></button>'+
+            '<details class="popover" id="visPopover"><summary title="Barra de vantagem e setas: personalizar">⚙ Barra e setas</summary><div class="pop-body vis-pop" id="visPainel"></div></details>'+
           '</div>'+
           '<div class="move-status" id="moveStatus"></div>'+
         '</div>'+
@@ -161,6 +168,7 @@ export function renderViewer(){
   });
   tecladoDeTablist(wrap.querySelector('.side-tabs'), '.side-tab', function(btn){ viewerTab = btn.dataset.vtab; aplicarAbaViewer(); });
 
+  ligarControlesVis();
   renderLadoPicker(game);
   renderMovelist(game);
   renderAnaliseMotorUI(game);
@@ -402,7 +410,8 @@ export function renderAnaliseMotorUI(game){
   if(!game.analiseMotor){
     el.innerHTML = '<div class="btn-row"><button class="btn btn-primary btn-sm" id="analisarBtn">Analisar partida com o motor</button>'+
       '<button class="btn btn-ghost btn-sm" id="analisarRapidoBtn" title="Profundidade 12 — bem mais rápido, um pouco menos preciso">⚡ Análise rápida</button></div>'+
-      '<p class="ci-sub" style="margin-top:6px;">Avalia toda posição da partida e marca imprecisões, erros e blunders — nos seus lances por padrão.</p>';
+      '<p class="ci-sub" style="margin-top:6px;">Avalia toda posição da partida e marca imprecisões, erros e blunders — nos seus lances por padrão.</p>'+
+      '<p class="ci-sub nota-discreta">Sem análise completa, a barra e as setas usam avaliação ao vivo.</p>';
     var btn = document.getElementById('analisarBtn');
     if(btn) btn.addEventListener('click', function(){ iniciarAnaliseCompleta(game); });
     var btnRapido = document.getElementById('analisarRapidoBtn');
@@ -436,7 +445,7 @@ export function renderAnaliseMotorUI(game){
   if(nGreat) textoDestaque.push(nGreat+' ótimo'+(nGreat===1?'':'s'));
 
   var resumo = '<p class="lede" style="margin-bottom:8px;">'+
-    (game.analiseMotor.completo?'Análise completa':'Análise parcial (foi cancelada no meio)')+(game.analiseMotor.depthUsado?' (profundidade '+game.analiseMotor.depthUsado+')':'')+
+    (game.analiseMotor.completo?'Análise completa':(game.analiseMotor.faltantes>0?'Análise parcial ('+game.analiseMotor.faltantes+(game.analiseMotor.faltantes===1?' posição':' posições')+' sem avaliação — tente de novo)':'Análise parcial (foi cancelada no meio)'))+(game.analiseMotor.depthUsado?' (profundidade '+game.analiseMotor.depthUsado+')':'')+
     ' · '+contagem.blunder+' blunder'+(contagem.blunder===1?'':'s')+', '+contagem.erro+' erro'+(contagem.erro===1?'':'s')+', '+contagem.imprecisao+' imprecis'+(contagem.imprecisao===1?'ão':'ões')+', '+contagem.miss+' miss'+
     (meuLado ? ' nos seus lances' : '')+'.</p>'+
     (destaques.length ? '<div class="feedback-banner certo">🌟 '+textoDestaque.join(' e ')+' — bons momentos nessa partida!</div>' : '');
@@ -469,7 +478,9 @@ export function renderAnaliseMotorUI(game){
     '</div>';
   }).join('') : '<p class="ci-sub">Nenhum problema encontrado'+(meuLado?' nos seus lances':'')+' — mandou bem nessa!</p>';
 
-  el.innerHTML = resumo+brilhantesHtml+'<div class="analise-lista">'+listaHtml+'</div>'+
+  var notaPosicoes = (game.analiseMotor.posicoes && game.analiseMotor.posicoes.length) ? '' :
+    '<p class="ci-sub nota-discreta">Análise antiga: analise de novo para a barra e as setas valerem em todos os lances (por ora usam avaliação ao vivo).</p>';
+  el.innerHTML = resumo+brilhantesHtml+'<div class="analise-lista">'+listaHtml+'</div>'+notaPosicoes+
     '<div class="btn-row" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" id="analisarBtn">Analisar de novo</button><button class="btn btn-ghost btn-sm" id="analisarRapidoBtn" title="Profundidade 12 — mais rápido, um pouco menos preciso">⚡ Analisar de novo (rápido)</button></div>';
 
   el.querySelectorAll('[data-ver-ply]').forEach(function(btn){
@@ -558,6 +569,9 @@ export function stepTo(ply, skipRerenderMovelist){
     var label = (lastMove.color==='w' ? moveNum+'.' : moveNum+'...')+' '+lastMove.san;
     status.textContent = label + (ply===game.fens.length-1 ? '  ·  (última posição)' : '');
   }
+
+  status.dataset.base = status.textContent; /* a barra/setas acrescentam "Melhor: ..." a esse texto */
+  atualizarVisualPosicao(game);
 
   document.querySelectorAll('.move-btn').forEach(function(btn){
     btn.classList.toggle('current', parseInt(btn.dataset.ply,10)===ply);

@@ -197,7 +197,18 @@ export async function loadFromLocalServer(){
   }
 }
 
-export async function persist(){
+/* Gravacoes em fila: duas chamadas quase juntas nunca correm em paralelo (no servidor local o pedido mais
+   antigo podia chegar depois e sobrescrever o mais novo). O snapshot e tirado quando a vez chega, entao a
+   ultima gravacao sempre leva o estado mais recente. */
+var filaPersist = Promise.resolve();
+
+export function persist(){
+  var p = filaPersist.then(persistirAgora, persistirAgora);
+  filaPersist = p.then(function(){}, function(){}); /* a fila nunca fica "rejeitada" */
+  return p;
+}
+
+async function persistirAgora(){
   if(LOCAL_SERVER_MODE){
     var okLocal = await saveToLocalServer();
     if(okLocal) return true;
@@ -236,7 +247,7 @@ document.getElementById('loadFileInput').addEventListener('change', function(e){
   reader.onload = async function(evt){
     try{
       var parsed = JSON.parse(String(evt.target.result||''));
-      if(!parsed || typeof parsed !== 'object'){ throw new Error('formato inválido'); }
+      if(!blobValido(parsed)){ throw new Error('formato inválido'); }
       applyStateBlob(parsed);
       await persist();
       sincronizarControlesMotor();
@@ -276,14 +287,20 @@ export function backfillMeuLado(){
   });
 }
 
+/* Um JSON qualquer (ou de outro app) nao pode passar por backup: precisa ter cara de caderno. */
+export function blobValido(b){
+  if(!b || typeof b!=='object' || Array.isArray(b)) return false;
+  return Array.isArray(b.erros) || Array.isArray(b.partidas) || (b.version!==undefined && !!(b.streak || b.checklistByDate));
+}
+
 export function applyStateBlob(blob){
-  if(!blob) return;
-  state.erros = blob.erros || state.erros;
-  state.partidas = blob.partidas || state.partidas;
-  state.streak = blob.streak || state.streak;
-  state.checklistByDate = blob.checklistByDate || state.checklistByDate;
-  state.tacticsProgress = blob.tacticsProgress || state.tacticsProgress;
-  state.meuNick = blob.meuNick || state.meuNick;
+  if(!blob || typeof blob!=='object') return;
+  if(Array.isArray(blob.erros)) state.erros = blob.erros;
+  if(Array.isArray(blob.partidas)) state.partidas = blob.partidas;
+  if(blob.streak && typeof blob.streak==='object') state.streak = blob.streak;
+  if(blob.checklistByDate && typeof blob.checklistByDate==='object') state.checklistByDate = blob.checklistByDate;
+  if(blob.tacticsProgress && typeof blob.tacticsProgress==='object') state.tacticsProgress = blob.tacticsProgress;
+  if(typeof blob.meuNick==='string') state.meuNick = blob.meuNick; /* aceita nick vazio: restaurar backup sem nick limpa o atual */
   if(blob.motorConfig){
     state.motorConfig.multiPv = blob.motorConfig.multiPv || state.motorConfig.multiPv;
     state.motorConfig.movetimeMs = blob.motorConfig.movetimeMs || state.motorConfig.movetimeMs;

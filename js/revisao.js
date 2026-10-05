@@ -1,6 +1,7 @@
 /* Revisao espacada dos erros catalogados - modo simples e modo com motor. */
 import { classificarLanceCompleto, materialBalance, normalizarAvaliacao, pctBarraDeCp, pvParaSan } from './analysis.js';
 import { boardSquaresHTML, setasSVG } from './board.js';
+import { avalCurtoDe, barraAvaliacaoHTML, coresSetasRevisao, setaDeUci } from './tabuleiro-ui.js';
 import { avaliarFEN, engineState } from './engine.js';
 import { persist } from './persistence.js';
 import { renderErros, tipoLabel } from './render-erros.js';
@@ -303,30 +304,6 @@ export function renderRevisarSimples(wrap, en, game, temTabuleiro, totalPendente
 }
 
 /* ---------- Tabuleiro da revisao: barra de avaliacao, setas e arrastar-e-soltar ---------- */
-var COR_SETA_MELHOR = '#3f8f4a';
-var COR_SETA_TENTATIVA = '#e08a1e';
-var COR_SETA_PARTIDA = '#c0392b';
-
-function avalCurtoDe(norm){
-  if(norm.mate!==null && norm.mate!==undefined) return 'M'+Math.abs(norm.mate);
-  var v = (norm.cp||0)/100;
-  return (v>=0 ? '+' : '−')+Math.abs(v).toFixed(1);
-}
-
-function setaDeUci(uci, cor){
-  return (uci && uci.length>=4) ? { from:uci.slice(0,2), to:uci.slice(2,4), cor:cor } : null;
-}
-
-function barraAvaliacaoHTML(b){
-  var fillCor = b.corBaixo==='w' ? '#f2f0e8' : '#2b2b2b';
-  var fundo = b.corBaixo==='w' ? '#2b2b2b' : '#f2f0e8';
-  var pos = b.pctBaixo>=50 ? 'bottom:3px;' : 'top:3px;';
-  return '<div class="vbar" style="background:'+fundo+';" title="'+escapeHtml(b.titulo)+'" role="img" aria-label="'+escapeHtml(b.titulo+': '+b.texto)+'">'+
-    '<div class="vbar-fill" style="height:'+b.pctBaixo+'%;background:'+fillCor+';"></div>'+
-    '<div class="vbar-num" style="'+pos+'">'+escapeHtml(b.curto)+'</div>'+
-  '</div>';
-}
-
 /* Faixa do jogador acima/abaixo do tabuleiro (igual a da aba Partidas). Mesmo sem partida vinculada ela
    ocupa o espaco, pra o tabuleiro ficar exatamente no mesmo lugar nas duas telas. */
 function faixaRevisaoHTML(cor){
@@ -536,8 +513,8 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
       var setasS = [];
       if(cursorS===0){
         var lu = ri.resultado.lanceUsuario;
-        setasS.push(setaDeUci(melhorUci, COR_SETA_MELHOR));
-        if(lu && (lu.from+lu.to)!==(melhorUci||'').slice(0,4)) setasS.push({ from:lu.from, to:lu.to, cor:COR_SETA_TENTATIVA });
+        setasS.push(setaDeUci(melhorUci, coresSetasRevisao().melhor));
+        if(lu && (lu.from+lu.to)!==(melhorUci||'').slice(0,4)) setasS.push({ from:lu.from, to:lu.to, cor:coresSetasRevisao().tentativa });
         legendaSetas = 'Seta verde: melhor lance do motor · laranja: a sua tentativa.';
       }
       boardHtml = blocoTabuleiro('', boardSquaresHTML(seqSua[cursorS], lastMoveS, flipped), setasS, cursorS===1 ? barraSua : barraRef, flipped);
@@ -548,7 +525,7 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
       ri.cursorPly = cursorM;
       var ucM = cursorM>0 ? ri.linhaMotor.uci[cursorM-1] : null;
       var lastMoveM = ucM ? {from:ucM.slice(0,2), to:ucM.slice(2,4)} : null;
-      var setaM = setaDeUci(ri.linhaMotor.uci[cursorM], COR_SETA_MELHOR);
+      var setaM = setaDeUci(ri.linhaMotor.uci[cursorM], coresSetasRevisao().melhor);
       if(setaM) legendaSetas = 'Seta verde: próximo lance da sugestão do motor.';
       boardHtml = blocoTabuleiro('', boardSquaresHTML(ri.linhaMotor.fens[cursorM], lastMoveM, flipped), [setaM], barraRef, flipped);
       navHtml = navPlyHTML(cursorM, maxM);
@@ -560,8 +537,8 @@ export function renderRevisarComMotor(wrap, en, game, totalPendentes){
       var setasJ = [];
       if(cursorJ===pre){
         var mvReal = game.applied[pre];
-        setasJ.push(setaDeUci(melhorUci, COR_SETA_MELHOR));
-        if(mvReal && (mvReal.from+mvReal.to)!==(melhorUci||'').slice(0,4)) setasJ.push({ from:mvReal.from, to:mvReal.to, cor:COR_SETA_PARTIDA });
+        setasJ.push(setaDeUci(melhorUci, coresSetasRevisao().melhor));
+        if(mvReal && (mvReal.from+mvReal.to)!==(melhorUci||'').slice(0,4)) setasJ.push({ from:mvReal.from, to:mvReal.to, cor:coresSetasRevisao().partida });
         legendaSetas = 'Seta verde: melhor lance do motor · vermelha: o que você jogou na partida.';
       }
       boardHtml = blocoTabuleiro('', boardSquaresHTML(game.fens[cursorJ], lastMoveJ, flipped), setasJ, barraRef, flipped);

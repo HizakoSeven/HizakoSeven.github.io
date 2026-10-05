@@ -3,6 +3,7 @@ import { fenToBoard } from './board.js';
 import { avaliarFEN, engineState, iniciarMotor, interromperBuscaSegundoPlano, reiniciarHashMotor } from './engine.js';
 import { renderAnaliseMotorUI, renderMovelist } from './partidas.js';
 import { persist } from './persistence.js';
+import { atualizarVisualPosicao } from './posicao-visual.js';
 import { ENGINE_PERDA_ACEITAVEL } from './revisao.js';
 import { state } from './state.js';
 import { renderPainelTempo } from './tempo.js';
@@ -15,6 +16,34 @@ export function clkParaSegundos(clk){
   if(partes.length===3) return partes[0]*3600+partes[1]*60+partes[2];
   if(partes.length===2) return partes[0]*60+partes[1];
   return null;
+}
+
+/* Avaliacao do motor (do ponto de vista de QUEM TEM A VEZ, como o UCI devolve) -> ponto de vista das BRANCAS. */
+export function avaliacaoParaBrancas(info, fen){
+  info = info || {};
+  var sinal = (String(fen||'').split(' ')[1]==='b') ? -1 : 1;
+  if(info.mate!==null && info.mate!==undefined) return { cp:null, mate:sinal*info.mate };
+  return { cp:sinal*(info.cp||0), mate:null };
+}
+
+/* Versao compacta (pra guardar na partida) das linhas de uma posicao:
+   { cp, mate, m:'e2e4', pv:[ate 6 lances], l:[{cp,mate,u}] (linhas 2 e 3) } ou { fim:'mate'|'empate' } em posicao final. */
+export function compactarPosicao(linhas, fen){
+  if(!linhas || !linhas.length) return null;
+  var l0 = linhas[0];
+  if(l0.terminal) return { fim: l0.terminal==='checkmate' ? 'mate' : 'empate' };
+  var base = avaliacaoParaBrancas(l0, fen);
+  var pos = { cp:base.cp, mate:base.mate };
+  var pv = (l0.pv||[]).slice(0,6);
+  if(pv.length){ pos.m = pv[0]; pos.pv = pv; }
+  var extras = linhas.slice(1,3).filter(function(x){ return x && !x.terminal; }).map(function(x){
+    var a = avaliacaoParaBrancas(x, fen);
+    var o = { cp:a.cp, mate:a.mate };
+    if(x.pv && x.pv[0]) o.u = x.pv[0];
+    return o;
+  });
+  if(extras.length) pos.l = extras;
+  return pos;
 }
 
 export function mapClasseParaTipo(classe){
@@ -105,6 +134,7 @@ export async function iniciarAnaliseCompleta(game, opcoes){
     reiniciarHashMotor(); /* zera o hash antes da 1a busca: cada analise completa parte do mesmo estado */
 
     var todasLinhas = new Array(total);
+    var posicoesNovas = new Array(total); /* avaliacao compacta por posicao (barra e setas na aba Partidas) */
     var depthAnalise = opcoes.depth || state.motorConfig.depthAnalise || 20;
     var depthReserva = Math.max(10, depthAnalise-6); /* 2a tentativa quando uma posicao estoura o tempo */
     var multiPvAnalise = Math.max(2, state.motorConfig.multiPv || 1); /* Great precisa comparar a 1a com a 2a linha */
@@ -119,6 +149,7 @@ export async function iniciarAnaliseCompleta(game, opcoes){
           if(res && res.parcial){ resolve('parcial'); return; } /* busca interrompida (cancelar ou tempo estourado): resultado raso, descarta */
           var linhas = (res && res.linhas) || [];
           todasLinhas[idx] = linhas.length ? linhas : [{cp:0, mate:null, pv:[]}];
+          posicoesNovas[idx] = compactarPosicao(todasLinhas[idx], game.fens[idx]);
           minha.atual = idx+1;
           renderAnaliseMotorUI(game);
           resolve('ok');
@@ -140,7 +171,10 @@ export async function iniciarAnaliseCompleta(game, opcoes){
     var completo = !minha.cancelado && !motorCaiu && semResultado===0;
     var porPlyExistente = (game.analiseMotor && game.analiseMotor.porPly) || {};
     var porPly = derivarClassificacoesPorPly(todasLinhas, game.applied, porPlyExistente, game.fens);
-    game.analiseMotor = { porPly: porPly, feitoEm: Date.now(), completo: completo, depthUsado: depthAnalise, faltantes: semResultado };
+    /* mescla por indice: uma analise parcial/cancelada nao apaga o que uma anterior ja tinha calculado */
+    var posicoes = ((game.analiseMotor && game.analiseMotor.posicoes) || []).slice();
+    for(var pi=0; pi<total; pi++){ if(posicoesNovas[pi]) posicoes[pi] = posicoesNovas[pi]; }
+    game.analiseMotor = { porPly: porPly, feitoEm: Date.now(), completo: completo, depthUsado: depthAnalise, faltantes: semResultado, posicoes: posicoes, versao: 2 };
     await persist();
     renderMovelist(game);
     renderPainelTempo(game);
@@ -153,6 +187,7 @@ export async function iniciarAnaliseCompleta(game, opcoes){
     if(state.analiseEmAndamento===minha) state.analiseEmAndamento = null; /* nunca apaga a analise de outra */
     loopAnaliseAtivo = false;
     renderAnaliseMotorUI(game);
+    if(state.openGameId===game.id) atualizarVisualPosicao(game); /* passa a usar a analise salva */
   }
 }
 

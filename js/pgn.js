@@ -92,6 +92,8 @@ export function novoIdPartida(){
    `vazio:true` = nao havia lances. Usada pela importacao manual e pela sincronizacao. */
 export function construirPartida(pgnTexto, idUnico){
   var headers = extractHeaders(pgnTexto);
+  /* partida que nao comeca da posicao inicial (Chess960, posicao montada): o app parte sempre do inicio */
+  if(String(headers.SetUp||'')==='1' && headers.FEN) return { ok:false, motivo:'posicao-customizada' };
   var tokens = extractSanTokens(extractMovetext(pgnTexto));
   if(tokens.length===0) return { ok:false, vazio:true };
   var built = buildGameFromSan(tokens);
@@ -133,6 +135,10 @@ export async function importPgnText(raw){
   for(var i=0;i<chunks.length;i++){
     var r = construirPartida(chunks[i], novoIdPartida());
     if(r.vazio) continue;
+    if(!r.ok && r.motivo==='posicao-customizada'){
+      lastError = 'Uma das partidas começa de uma posição customizada (Chess960 ou posição montada) — ainda não é suportada, então foi ignorada.';
+      continue;
+    }
     if(!r.ok){
       lastError = 'Não consegui ler uma partida a partir do lance '+(r.appliedCount!==undefined ? (r.appliedCount+1) : '?')+' ("'+escapeHtml(r.failedToken||'?')+'"). Confira se o texto foi copiado por inteiro.';
       continue;

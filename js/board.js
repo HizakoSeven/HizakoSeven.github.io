@@ -86,11 +86,13 @@ export function boardSquaresHTML(fen, lastMove, flipped, extraClasses){
   return html;
 }
 
-/* Setas (SVG) sobre o tabuleiro. `setas` = [{from:'e2', to:'e4', cor:'#3f8f4a'}].
-   O SVG usa um viewBox 800x800 (cada casa = 100x100) e respeita o tabuleiro invertido. */
-export function setasSVG(setas, flipped){
+/* Setas (SVG) sobre o tabuleiro. `setas` = [{from:'e2', to:'e4', cor:'#3f8f4a', largura?:16, op?:1}].
+   O SVG usa um viewBox 800x800 (cada casa = 100x100) e respeita o tabuleiro invertido.
+   `opts.opacidade` (0..1, padrao 0.82) vale pro conjunto; `op` em cada seta multiplica (ex.: linhas secundarias). */
+export function setasSVG(setas, flipped, opts){
   setas = (setas||[]).filter(Boolean);
   if(!setas.length) return '';
+  var opac = (opts && typeof opts.opacidade==='number') ? opts.opacidade : 0.82;
   function centro(sq){
     var f = FILES.indexOf(sq.charAt(0));
     var r = parseInt(sq.charAt(1), 10);
@@ -101,17 +103,18 @@ export function setasSVG(setas, flipped){
     var dx = t.x-a.x, dy = t.y-a.y;
     var len = Math.sqrt(dx*dx+dy*dy);
     if(!len) return '';
+    var esc = (s.largura || 16)/16; /* cabeca proporcional a espessura */
     var ux = dx/len, uy = dy/len, px = -uy, py = ux;
     var ponta = { x:t.x-ux*8, y:t.y-uy*8 };
-    var cabeca = 38, larg = 24;
+    var cabeca = 38*esc, larg = 24*esc;
     var base = { x:ponta.x-ux*cabeca, y:ponta.y-uy*cabeca };
     var ini = { x:a.x+ux*20, y:a.y+uy*20 };
-    return '<g fill="'+s.cor+'" stroke="'+s.cor+'">'+
-      '<line x1="'+ini.x.toFixed(1)+'" y1="'+ini.y.toFixed(1)+'" x2="'+base.x.toFixed(1)+'" y2="'+base.y.toFixed(1)+'" stroke-width="16"/>'+
+    return '<g fill="'+s.cor+'" stroke="'+s.cor+'"'+(s.op!==undefined && s.op!==null ? ' opacity="'+s.op+'"' : '')+'>'+
+      '<line x1="'+ini.x.toFixed(1)+'" y1="'+ini.y.toFixed(1)+'" x2="'+base.x.toFixed(1)+'" y2="'+base.y.toFixed(1)+'" stroke-width="'+(s.largura||16)+'"/>'+
       '<polygon stroke="none" points="'+ponta.x.toFixed(1)+','+ponta.y.toFixed(1)+' '+
         (base.x+px*larg).toFixed(1)+','+(base.y+py*larg).toFixed(1)+' '+
         (base.x-px*larg).toFixed(1)+','+(base.y-py*larg).toFixed(1)+'"/>'+
     '</g>';
   }).join('');
-  return '<svg class="board-setas" viewBox="0 0 800 800" aria-hidden="true"><g opacity="0.82">'+corpo+'</g></svg>';
+  return '<svg class="board-setas" viewBox="0 0 800 800" aria-hidden="true"><g opacity="'+opac+'">'+corpo+'</g></svg>';
 }
