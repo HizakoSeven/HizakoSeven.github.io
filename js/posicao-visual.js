@@ -19,6 +19,24 @@ var tokenVivo = 0;
 var timerVivo = null;
 var pendente = false;
 
+var observador = null;
+/* A aba Analise registra aqui uma funcao chamada a cada vez que a posicao mostrada (ou sua avaliacao) muda. */
+export function registrarObservadorPosicao(fn){ observador = fn; }
+
+/* O que se sabe da posicao atual: { pos, fen, ply, estado:'ok'|'esperando'|'sem'|'desligado'|'falhou', fonte } */
+export function infoPosicaoAtual(game){
+  var vis = getPrefsVis();
+  var ply = state.currentPly, fen = game.fens[ply];
+  var salva = posicaoSalva(game, ply);
+  var pos = salva || posicaoTerminal(fen), fonte = salva ? 'salva' : (pos ? 'final' : null);
+  if(!pos){
+    var v = vivoCache.get(fen+'|'+mpvAoVivo(vis));
+    if(v){ pos = v; fonte = 'ao vivo'; }
+  }
+  var estado = pos ? 'ok' : (engineState==='falhou' ? 'falhou' : (pendente ? 'esperando' : (vis.aoVivo ? 'sem' : 'desligado')));
+  return { pos:pos, fen:fen, ply:ply, estado:estado, fonte:fonte };
+}
+
 function jogoAberto(){ return state.partidas.find(function(g){ return g.id===state.openGameId; }) || null; }
 
 function guardarVivo(chave, pos){
@@ -103,6 +121,7 @@ function desenhar(game, ply, fen, pos, vis){
     if(vis.rotuloSan && vis.setasOn && pos && pos.m){ var s = pvParaSan(fen, [pos.m], 1); san = s[0] || ''; }
     status.textContent = status.dataset.base + (san ? '  ·  Melhor: '+san : '');
   }
+  if(observador) observador(game);
 }
 
 function pedirAoVivo(game, ply, fen, vis, chave){

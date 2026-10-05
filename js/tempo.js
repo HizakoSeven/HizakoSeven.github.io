@@ -6,6 +6,7 @@
 import { clkParaSegundos } from './analysis.js';
 import { stepTo } from './partidas.js';
 import { ENGINE_PERDA_ACEITAVEL } from './revisao.js';
+import { CLASSE_COR } from './tabuleiro-ui.js';
 import { escapeHtml } from './utils.js';
 
 export function parseTimeControlSeconds(tc){
@@ -75,17 +76,6 @@ function mediana(valores){
   var meio = Math.floor(s.length/2);
   return s.length%2 ? s[meio] : (s[meio-1]+s[meio])/2;
 }
-
-var CLASSE_COR = {
-  otima: 'var(--good)',
-  boa: 'var(--good)',
-  imprecisao: 'var(--sage)',
-  erro: 'var(--amber)',
-  blunder: 'var(--flag-red)',
-  miss: '#6B4C7A',
-  great: '#2E6E9E',
-  brilhante: '#1F7A72'
-};
 
 export function renderPainelTempo(game){
   var el = document.getElementById('tempoAnaliseWrap');

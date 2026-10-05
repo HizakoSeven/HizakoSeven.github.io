@@ -102,6 +102,18 @@ function secoesRecolhiveis(escopo){
   return wrapArray((escopo || document).querySelectorAll('details.fold, #tab-plano > details'));
 }
 
+/* Registra <details class="fold" id="..."> criados DEPOIS do carregamento (ex.: blocos da aba Analise, que sao
+   redesenhados): restaura aberto/fechado e passa a lembrar. Precisa de id estavel; sem id, ignora. */
+export function ligarRecolhiveis(escopo){
+  if(!lido) ler();
+  secoesRecolhiveis(escopo).forEach(function(d){
+    if(!d.id || d.dataset.recolhivel==='1') return;
+    d.dataset.recolhivel = '1';
+    if(Object.prototype.hasOwnProperty.call(prefs.abertos, d.id)) d.open = !!prefs.abertos[d.id];
+    d.addEventListener('toggle', function(){ prefs.abertos[d.id] = d.open; gravar(); });
+  });
+}
+
 export function fecharPopovers(exceto){
   wrapArray(document.querySelectorAll('details.popover[open]')).forEach(function(d){
     if(d!==exceto) d.open = false;

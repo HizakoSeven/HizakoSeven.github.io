@@ -1,7 +1,8 @@
 /* Classificacao de lances (blunder/erro/imprecisao/brilhante/miss) e analise completa de partida. */
 import { fenToBoard } from './board.js';
 import { avaliarFEN, engineState, iniciarMotor, interromperBuscaSegundoPlano, reiniciarHashMotor } from './engine.js';
-import { renderAnaliseMotorUI, renderMovelist } from './partidas.js';
+import { renderAnaliseMotorUI } from './analise-ui.js';
+import { renderMovelist } from './partidas.js';
 import { persist } from './persistence.js';
 import { atualizarVisualPosicao } from './posicao-visual.js';
 import { ENGINE_PERDA_ACEITAVEL } from './revisao.js';
@@ -135,6 +136,7 @@ export async function iniciarAnaliseCompleta(game, opcoes){
 
     var todasLinhas = new Array(total);
     var posicoesNovas = new Array(total); /* avaliacao compacta por posicao (barra e setas na aba Partidas) */
+    minha.posicoes = posicoesNovas; /* a aba Analise desenha o grafico aos poucos, conforme as posicoes ficam prontas */
     var depthAnalise = opcoes.depth || state.motorConfig.depthAnalise || 20;
     var depthReserva = Math.max(10, depthAnalise-6); /* 2a tentativa quando uma posicao estoura o tempo */
     var multiPvAnalise = Math.max(2, state.motorConfig.multiPv || 1); /* Great precisa comparar a 1a com a 2a linha */

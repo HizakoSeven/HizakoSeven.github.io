@@ -1,7 +1,8 @@
 /* Caderno de erros: formulario, filtros, listagem. */
 import { boardSquaresHTML } from './board.js';
 import { switchTab } from './main.js';
-import { renderAnaliseMotorUI, renderMovelist, renderQuickErroPanel } from './partidas.js';
+import { renderAnaliseMotorUI } from './analise-ui.js';
+import { renderMovelist, renderQuickErroPanel } from './partidas.js';
 import { persist } from './persistence.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
 import { REVISAO_ACERTOS_PARA_DOMINAR, renderRevisar, resetRevisaoInterativa } from './revisao.js';

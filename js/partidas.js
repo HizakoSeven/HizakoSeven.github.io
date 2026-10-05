@@ -1,5 +1,6 @@
 /* Visualizador de partidas importadas: tabuleiro, navegacao de lances, painel de erro rapido. */
-import { cancelarAnaliseCompleta, clkParaSegundos, iniciarAnaliseCompleta, mapClasseParaTipo } from './analysis.js';
+import { clkParaSegundos, mapClasseParaTipo } from './analysis.js';
+import { renderAnaliseMotorUI } from './analise-ui.js';
 import { boardSquaresHTML } from './board.js';
 import { adicionarIgnorado, chavePartida } from './dedupe.js';
 import { fraseDesfecho, rotuloModalidade, urlChesscomSegura } from './fonte-chesscom.js';
@@ -7,7 +8,7 @@ import { atualizarVisualPosicao, cancelarVisual, ligarControlesVis } from './pos
 import { persist } from './persistence.js';
 import { atualizarTelasDeErros, collectErroEditValues, erroEditFieldsHTML, removerErro, renderErros, tipoLabel } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
-import { MOTOR_PRESETS, state } from './state.js';
+import { state } from './state.js';
 import { parseTimeControlSeconds, renderPainelTempo } from './tempo.js';
 import { escapeHtml, formatPtDate, showToast, soltarFocoAposClique, tecladoDeTablist, todayStr } from './utils.js';
 
@@ -254,7 +255,7 @@ function aplicarAbaViewer(){
 }
 
 /* Marcadores nas abas: erro ja registrado no lance atual, analise feita. */
-function atualizarRotulosAbas(game){
+export function atualizarRotulosAbas(game){
   var tErro = document.querySelector('[data-vtab="erro"]');
   if(tErro){
     var ex = state.currentPly>0 && state.erros.some(function(e){ return e.gameId===game.id && e.ply===state.currentPly; });
@@ -387,117 +388,6 @@ export async function registrarErroDireto(game, ply){
   atualizarTelasDeErros();
   await persist();
   return true;
-}
-
-export function renderAnaliseMotorUI(game){
-  var el = document.getElementById('analiseMotorWrap');
-  if(!el) return;
-  atualizarRotulosAbas(game);
-
-  var emAndamento = state.analiseEmAndamento && state.analiseEmAndamento.gameId===game.id;
-  if(emAndamento){
-    var a = state.analiseEmAndamento;
-    var pct = a.total ? Math.round(a.atual/a.total*100) : 0;
-    el.innerHTML =
-      '<p class="motor-status">Analisando posição '+a.atual+' / '+a.total+'…</p>'+
-      '<div class="progress-bar"><div class="progress-fill" style="width:'+pct+'%;"></div></div>'+
-      '<div class="btn-row" style="justify-content:center;margin-top:6px;"><button class="btn btn-ghost btn-sm" id="analiseCancelarBtn">Cancelar</button></div>';
-    var cancelBtn = document.getElementById('analiseCancelarBtn');
-    if(cancelBtn) cancelBtn.addEventListener('click', cancelarAnaliseCompleta);
-    return;
-  }
-
-  if(!game.analiseMotor){
-    el.innerHTML = '<div class="btn-row"><button class="btn btn-primary btn-sm" id="analisarBtn">Analisar partida com o motor</button>'+
-      '<button class="btn btn-ghost btn-sm" id="analisarRapidoBtn" title="Profundidade 12 — bem mais rápido, um pouco menos preciso">⚡ Análise rápida</button></div>'+
-      '<p class="ci-sub" style="margin-top:6px;">Avalia toda posição da partida e marca imprecisões, erros e blunders — nos seus lances por padrão.</p>'+
-      '<p class="ci-sub nota-discreta">Sem análise completa, a barra e as setas usam avaliação ao vivo.</p>';
-    var btn = document.getElementById('analisarBtn');
-    if(btn) btn.addEventListener('click', function(){ iniciarAnaliseCompleta(game); });
-    var btnRapido = document.getElementById('analisarRapidoBtn');
-    if(btnRapido) btnRapido.addEventListener('click', function(){ iniciarAnaliseCompleta(game, { depth: MOTOR_PRESETS.rapido.depthAnalise }); });
-    return;
-  }
-
-  var meuLado = game.meuLado;
-  var contagem = {imprecisao:0, erro:0, blunder:0, miss:0};
-  var itens = [];
-  var destaques = [];
-  Object.keys(game.analiseMotor.porPly).forEach(function(plyStr){
-    var ply = parseInt(plyStr,10);
-    var info = game.analiseMotor.porPly[plyStr];
-    if(meuLado && info.cor!==meuLado) return;
-    if(info.classe==='otima' || info.classe==='boa') return;
-    if(info.classe==='brilhante' || info.classe==='great'){ destaques.push({ply:ply, info:info}); return; }
-    contagem[info.classe] = (contagem[info.classe]||0)+1;
-    itens.push({ply:ply, info:info});
-  });
-  itens.sort(function(a,b){ return a.ply-b.ply; });
-  destaques.sort(function(a,b){ return a.ply-b.ply; });
-
-  var jaLogados = {};
-  state.erros.forEach(function(e){ if(e.gameId===game.id && e.ply) jaLogados[e.ply]=true; });
-
-  var nBrilhantes = destaques.filter(function(d){ return d.info.classe==='brilhante'; }).length;
-  var nGreat = destaques.filter(function(d){ return d.info.classe==='great'; }).length;
-  var textoDestaque = [];
-  if(nBrilhantes) textoDestaque.push(nBrilhantes+' brilhante'+(nBrilhantes===1?'':'s'));
-  if(nGreat) textoDestaque.push(nGreat+' ótimo'+(nGreat===1?'':'s'));
-
-  var resumo = '<p class="lede" style="margin-bottom:8px;">'+
-    (game.analiseMotor.completo?'Análise completa':(game.analiseMotor.faltantes>0?'Análise parcial ('+game.analiseMotor.faltantes+(game.analiseMotor.faltantes===1?' posição':' posições')+' sem avaliação — tente de novo)':'Análise parcial (foi cancelada no meio)'))+(game.analiseMotor.depthUsado?' (profundidade '+game.analiseMotor.depthUsado+')':'')+
-    ' · '+contagem.blunder+' blunder'+(contagem.blunder===1?'':'s')+', '+contagem.erro+' erro'+(contagem.erro===1?'':'s')+', '+contagem.imprecisao+' imprecis'+(contagem.imprecisao===1?'ão':'ões')+', '+contagem.miss+' miss'+
-    (meuLado ? ' nos seus lances' : '')+'.</p>'+
-    (destaques.length ? '<div class="feedback-banner certo">🌟 '+textoDestaque.join(' e ')+' — bons momentos nessa partida!</div>' : '');
-
-  var brilhantesHtml = destaques.length ? '<div class="analise-lista" style="margin-bottom:10px;">'+destaques.map(function(it){
-    var moveNum = Math.floor((it.ply-1)/2)+1;
-    var mv = game.applied[it.ply-1];
-    var label = (mv.color==='w'?moveNum+'.':moveNum+'...')+' '+escapeHtml(mv.san);
-    var tipoBadge = it.info.classe==='brilhante' ? 'brilliant' : 'great';
-    return '<div class="analise-item">'+
-      '<span class="badge badge-'+tipoBadge+'">'+tipoLabel(tipoBadge)+'</span>'+
-      '<span>'+label+'</span>'+
-      '<button class="btn btn-ghost btn-sm" data-ver-ply="'+it.ply+'">Ver de novo</button>'+
-    '</div>';
-  }).join('')+'</div>' : '';
-
-  var listaHtml = itens.length ? itens.map(function(it){
-    var moveNum = Math.floor((it.ply-1)/2)+1;
-    var mv = game.applied[it.ply-1];
-    var label = (mv.color==='w'?moveNum+'.':moveNum+'...')+' '+escapeHtml(mv.san);
-    var tipo = mapClasseParaTipo(it.info.classe);
-    var segRestantes = mv.clk ? clkParaSegundos(mv.clk) : null;
-    var pressao = (segRestantes!==null && segRestantes<30) ? ' · relógio em '+segRestantes+'s' : '';
-    return '<div class="analise-item">'+
-      '<span class="badge badge-'+tipo+'">'+tipoLabel(tipo)+'</span>'+
-      '<span>'+label+' (perdeu ~'+it.info.perda+'cp)'+pressao+'</span>'+
-      (jaLogados[it.ply]
-        ? '<span class="flag" title="já registrado">● registrado</span><button class="btn btn-ghost btn-sm" data-ver-ply="'+it.ply+'">Ver</button>'
-        : '<button class="btn btn-ghost btn-sm" data-ver-ply="'+it.ply+'">Ver</button><button class="btn btn-primary btn-sm" data-registrar-ply="'+it.ply+'" title="Registra direto no caderno, sem abrir o formulário">Registrar</button>')+
-    '</div>';
-  }).join('') : '<p class="ci-sub">Nenhum problema encontrado'+(meuLado?' nos seus lances':'')+' — mandou bem nessa!</p>';
-
-  var notaPosicoes = (game.analiseMotor.posicoes && game.analiseMotor.posicoes.length) ? '' :
-    '<p class="ci-sub nota-discreta">Análise antiga: analise de novo para a barra e as setas valerem em todos os lances (por ora usam avaliação ao vivo).</p>';
-  el.innerHTML = resumo+brilhantesHtml+'<div class="analise-lista">'+listaHtml+'</div>'+notaPosicoes+
-    '<div class="btn-row" style="margin-top:10px;"><button class="btn btn-ghost btn-sm" id="analisarBtn">Analisar de novo</button><button class="btn btn-ghost btn-sm" id="analisarRapidoBtn" title="Profundidade 12 — mais rápido, um pouco menos preciso">⚡ Analisar de novo (rápido)</button></div>';
-
-  el.querySelectorAll('[data-ver-ply]').forEach(function(btn){
-    btn.addEventListener('click', function(){ stepTo(parseInt(btn.dataset.verPly,10)); });
-  });
-  el.querySelectorAll('[data-registrar-ply]').forEach(function(btn){
-    btn.addEventListener('click', function(){
-      if(btn.disabled) return;
-      btn.disabled = true;
-      btn.textContent = '✓ registrado';
-      registrarErroDireto(game, parseInt(btn.dataset.registrarPly,10));
-    });
-  });
-  var btnDeNovo = document.getElementById('analisarBtn');
-  if(btnDeNovo) btnDeNovo.addEventListener('click', function(){ iniciarAnaliseCompleta(game); });
-  var btnDeNovoRapido = document.getElementById('analisarRapidoBtn');
-  if(btnDeNovoRapido) btnDeNovoRapido.addEventListener('click', function(){ iniciarAnaliseCompleta(game, { depth: MOTOR_PRESETS.rapido.depthAnalise }); });
 }
 
 export function moveTimeLabel(mv){

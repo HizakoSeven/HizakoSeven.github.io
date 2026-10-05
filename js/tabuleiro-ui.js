@@ -1,7 +1,22 @@
 /* Pecas visuais compartilhadas entre a aba Partidas e a aba Revisar: cores das setas, barra de avaliacao,
    conversoes de avaliacao. Nao importa partidas.js nem revisao.js (so ui.js e utils.js). */
+import { winPctDeCp } from './analise-stats.js';
 import { getPrefsVis } from './ui.js';
 import { escapeHtml } from './utils.js';
+
+export { winPctDeCp };
+
+/* Cor de cada classe de lance (grafico de tempo, grafico de avaliacao, barras do resumo). */
+export var CLASSE_COR = {
+  otima: 'var(--good)',
+  boa: 'var(--good)',
+  imprecisao: 'var(--sage)',
+  erro: 'var(--amber)',
+  blunder: 'var(--flag-red)',
+  miss: '#6B4C7A',
+  great: '#2E6E9E',
+  brilhante: '#1F7A72'
+};
 
 export var COR_SETA_MELHOR = '#3f8f4a';
 export var COR_SETA_TENTATIVA = '#e08a1e';
@@ -25,11 +40,6 @@ export function avalCurtoDe(norm){
   if(norm.mate!==null && norm.mate!==undefined) return 'M'+Math.abs(norm.mate);
   var v = (norm.cp||0)/100;
   return (v>=0 ? '+' : '−')+Math.abs(v).toFixed(1);
-}
-
-/* Probabilidade de vitoria das brancas (0..100), formula do Lichess. */
-export function winPctDeCp(cp){
-  return 50 + 50*(2/(1+Math.exp(-0.00368208*cp)) - 1);
 }
 
 /* Mesma convencao da Revisar para a altura da barra em modo "peoes": cp limitado a +-500 -> 5..95%. */
