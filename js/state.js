@@ -31,6 +31,7 @@ export var state = {
     ultimoErro: null,
     ignorados: []
   },
+  variante: null, /* exploracao fora da partida (efemera; ver variante.js) */
   analiseEmAndamento: null,
   motorConfig: { multiPv:1, movetimeMs:1200, hashMb:16, movetimeAnaliseMs:400, depthAnalise:20 }
 };

@@ -4,6 +4,7 @@ import { CLASSES_ORDEM, acplPorLado, contagemPorClasse, faixaDaAvaliacao, fasesD
   pontoFraco, precisaoPorLado, serieDeAvaliacao, statsPorFase } from './analise-stats.js';
 import { cancelarAnaliseCompleta, clkParaSegundos, iniciarAnaliseCompleta, mapClasseParaTipo, pvParaSan } from './analysis.js';
 import { infoPosicaoAtual, registrarObservadorPosicao } from './posicao-visual.js';
+import { explorarLinha } from './variante-ui.js';
 import { atualizarRotulosAbas, registrarErroDireto, stepTo } from './partidas.js';
 import { ENGINE_PERDA_ACEITAVEL } from './revisao.js';
 import { tipoLabel } from './render-erros.js';
@@ -70,8 +71,11 @@ function blocoAtualHTML(){
   return '<div class="an-atual" id="anAtual" aria-live="polite"></div>';
 }
 
-function linhaMotorHTML(rotulo, av, texto){
-  return '<div class="an-linha"><span class="an-l-ev">'+escapeHtml(avalCurtoDe(av))+'</span><span class="an-l-rot">'+escapeHtml(rotulo)+'</span><span class="an-l-san">'+escapeHtml(texto)+'</span></div>';
+var linhasUciAtuais = []; /* UCI de cada linha mostrada em "posicao atual" (o botao ▶ usa o indice) */
+
+function linhaMotorHTML(rotulo, av, texto, idx){
+  return '<div class="an-linha"><span class="an-l-ev">'+escapeHtml(avalCurtoDe(av))+'</span><span class="an-l-rot">'+escapeHtml(rotulo)+'</span><span class="an-l-san">'+escapeHtml(texto)+'</span>'+
+    '<button type="button" class="an-explorar" data-explorar="'+idx+'" title="Explorar essa linha numa variante (jogue lances diferentes, Esc volta à partida)">▶ explorar</button></div>';
 }
 
 function preencherAtual(game){
@@ -84,15 +88,17 @@ function preencherAtual(game){
     var faixa = faixaDaAvaliacao(pos);
     var grande = pos.fim==='mate' ? '#' : (pos.fim==='empate' ? '=' : avalCurtoDe(pos));
     h = '<div class="an-atual-top"><span class="an-eval">'+escapeHtml(grande)+'</span>'+
-      '<span class="an-faixa">'+escapeHtml(faixa)+(info.fonte==='ao vivo' ? ' <small>(ao vivo)</small>' : '')+'</span>'+
+      '<span class="an-faixa">'+escapeHtml(faixa)+(info.variante ? ' <small>(variante)</small>' : (info.fonte==='ao vivo' ? ' <small>(ao vivo)</small>' : ''))+'</span>'+
       '<button type="button" class="btn btn-ghost btn-sm" id="anVisBtn" title="Personalizar a barra e as setas">⚙</button></div>';
     if(!pos.fim){
       var linhas = '';
-      var sans = pos.pv ? pvParaSan(info.fen, pos.pv, 6) : (pos.m ? pvParaSan(info.fen, [pos.m], 1) : []);
-      if(sans.length) linhas += linhaMotorHTML('1ª', pos, numerarSan(info.fen, sans));
+      linhasUciAtuais = [];
+      var uci1 = pos.pv ? pos.pv.slice(0,6) : (pos.m ? [pos.m] : []);
+      var sans = uci1.length ? pvParaSan(info.fen, uci1, 6) : [];
+      if(sans.length){ linhasUciAtuais.push(uci1); linhas += linhaMotorHTML('1ª', pos, numerarSan(info.fen, sans), linhasUciAtuais.length-1); }
       (pos.l||[]).forEach(function(x, i){
         var s = x.u ? pvParaSan(info.fen, [x.u], 1) : [];
-        if(s.length) linhas += linhaMotorHTML((i+2)+'ª', x, numerarSan(info.fen, s));
+        if(s.length){ linhasUciAtuais.push([x.u]); linhas += linhaMotorHTML((i+2)+'ª', x, numerarSan(info.fen, s), linhasUciAtuais.length-1); }
       });
       if(linhas) h += '<div class="an-linhas">'+linhas+'</div>';
     }
@@ -105,6 +111,9 @@ function preencherAtual(game){
       '<button type="button" class="btn btn-ghost btn-sm" id="anVisBtn" title="Personalizar a barra e as setas">⚙</button></div>';
   }
   el.innerHTML = h;
+  Array.prototype.forEach.call(el.querySelectorAll('[data-explorar]'), function(b){
+    b.addEventListener('click', function(){ explorarLinha(game, linhasUciAtuais[parseInt(b.dataset.explorar,10)]); });
+  });
   var btn = $('anVisBtn');
   if(btn) btn.addEventListener('click', function(e){
     e.stopPropagation(); /* senao o "clique fora" fecharia o painel na mesma hora */

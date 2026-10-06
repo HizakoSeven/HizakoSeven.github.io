@@ -5,6 +5,7 @@ import { boardSquaresHTML } from './board.js';
 import { adicionarIgnorado, chavePartida } from './dedupe.js';
 import { fraseDesfecho, rotuloModalidade, urlChesscomSegura } from './fonte-chesscom.js';
 import { atualizarVisualPosicao, cancelarVisual, ligarControlesVis } from './posicao-visual.js';
+import { descartarVariante, ligarControlesVariante, ligarTabuleiroInterativo, navegarVariante, renderVariante, sairDaVariante, varianteAtiva } from './variante-ui.js';
 import { persist } from './persistence.js';
 import { atualizarTelasDeErros, collectErroEditValues, erroEditFieldsHTML, removerErro, renderErros, tipoLabel } from './render-erros.js';
 import { renderHeaderStats, renderHoje } from './render-hoje.js';
@@ -87,6 +88,7 @@ export function renderPartidas(){
 }
 
 export function openGame(id){
+  state.variante = null; /* variante e efemera: nunca atravessa partidas */
   state.openGameId = id;
   state.currentPly = 0;
   var g = state.partidas.find(function(x){ return x.id===id; });
@@ -101,6 +103,7 @@ export function openGame(id){
 }
 
 export function closeGame(){
+  state.variante = null;
   cancelarVisual();
   state.openGameId = null;
   renderPartidas();
@@ -128,9 +131,14 @@ export function renderViewer(){
             '<button class="btn btn-ghost btn-sm" id="stepNext" title="Próximo lance (→)">▶</button>'+
             '<button class="btn btn-ghost btn-sm" id="stepLast" title="Fim (End)">⏭</button>'+
             '<button class="btn btn-ghost btn-sm" id="flipBtn" title="Girar tabuleiro">⇅ Girar</button>'+
+            '<button class="btn btn-ghost btn-sm" id="varBtn" aria-pressed="false" title="Explorar uma variante a partir dessa posição: jogue lances no tabuleiro (Esc ou ← no início voltam à partida)">⑂ Variante</button>'+
             '<button class="btn btn-ghost btn-sm" id="setasBtn" aria-pressed="true"></button>'+
             '<details class="popover" id="visPopover"><summary title="Barra de vantagem e setas: personalizar">⚙ Barra e setas</summary><div class="pop-body vis-pop" id="visPainel"></div></details>'+
           '</div>'+
+          '<div class="var-faixa" id="varFaixa" hidden><span class="var-tag">Variante</span><span class="var-linha" id="varLinha"></span>'+
+            '<span class="var-nav"><button type="button" class="btn btn-ghost btn-sm" id="varAntBtn" title="Lance anterior da variante (← no início volta à partida)">◀</button><button type="button" class="btn btn-ghost btn-sm" id="varProxBtn" title="Próximo lance da variante">▶</button></span>'+
+            '<button type="button" class="btn btn-primary btn-sm" id="varSairBtn" title="Descarta a variante e volta à partida (Esc)">Voltar à partida</button></div>'+
+          '<div class="promo-picker" id="varPromo" hidden></div>'+
           '<div class="move-status" id="moveStatus"></div>'+
         '</div>'+
         '<div class="game-side"><div class="game-side-inner">'+
@@ -155,11 +163,15 @@ export function renderViewer(){
       '</div>'+
     '</div>';
 
-  document.getElementById('stepFirst').addEventListener('click', function(){ stepTo(0); });
-  document.getElementById('stepPrev').addEventListener('click', function(){ stepTo(Math.max(0,state.currentPly-1)); });
-  document.getElementById('stepNext').addEventListener('click', function(){ stepTo(Math.min(game.fens.length-1,state.currentPly+1)); });
-  document.getElementById('stepLast').addEventListener('click', function(){ stepTo(game.fens.length-1); });
-  document.getElementById('flipBtn').addEventListener('click', function(){ state.boardFlipped=!state.boardFlipped; stepTo(state.currentPly,true); });
+  /* na variante, os botoes navegam a VARIANTE (← no inicio volta a partida); fora dela, a partida */
+  document.getElementById('stepFirst').addEventListener('click', function(){ if(!navegarVariante('inicio')) stepTo(0); });
+  document.getElementById('stepPrev').addEventListener('click', function(){ if(!navegarVariante('ant')) stepTo(Math.max(0,state.currentPly-1)); });
+  document.getElementById('stepNext').addEventListener('click', function(){ if(!navegarVariante('prox')) stepTo(Math.min(game.fens.length-1,state.currentPly+1)); });
+  document.getElementById('stepLast').addEventListener('click', function(){ if(!navegarVariante('fim')) stepTo(game.fens.length-1); });
+  document.getElementById('flipBtn').addEventListener('click', function(){
+    state.boardFlipped=!state.boardFlipped;
+    if(varianteAtiva()) renderVariante(game); else stepTo(state.currentPly,true); /* girar NAO descarta a variante */
+  });
   document.getElementById('notaGeralInput').addEventListener('blur', async function(e){
     game.notaGeral = e.target.value.trim();
     await persist();
@@ -170,13 +182,16 @@ export function renderViewer(){
   tecladoDeTablist(wrap.querySelector('.side-tabs'), '.side-tab', function(btn){ viewerTab = btn.dataset.vtab; aplicarAbaViewer(); });
 
   ligarControlesVis();
+  ligarControlesVariante();
+  ligarTabuleiroInterativo();
   renderLadoPicker(game);
   renderMovelist(game);
   renderAnaliseMotorUI(game);
   renderPainelTempo(game);
   painelGameId = null; /* o HTML do viewer acabou de ser recriado: o painel precisa ser pintado */
   aplicarAbaViewer();
-  stepTo(state.currentPly, true);
+  if(varianteAtiva() && state.variante.gameId===game.id) renderVariante(game); /* ex.: uma sincronizacao terminou: nao derruba a variante */
+  else stepTo(state.currentPly, true);
 }
 
 /* Dados da partida (aba Info). */
@@ -444,6 +459,7 @@ export function stepTo(ply, skipRerenderMovelist){
   var game = state.partidas.find(function(g){ return g.id===state.openGameId; });
   if(!game) return;
   ply = Math.max(0, Math.min(game.fens.length-1, ply));
+  if(varianteAtiva()) descartarVariante(); /* clicar noutro lance (lista, grafico, setas) e voltar a partida: a variante some */
   state.currentPly = ply;
   var fen = game.fens[ply];
   var lastMove = ply>0 ? game.applied[ply-1] : null;
@@ -702,6 +718,17 @@ document.addEventListener('keydown', function(e){
   if(teclaEmCampoDeTexto(e)) return;
   var game = state.partidas.find(function(g){ return g.id===state.openGameId; });
   if(!game) return;
+  if(varianteAtiva()){
+    /* na variante: ←/→ navegam a variante, ← no inicio (ponto de ruptura), Home e Esc a descartam */
+    if(e.key==='Escape'){
+      if(document.querySelector('details.popover[open]')) return; /* Esc fecha primeiro o menu aberto */
+      e.preventDefault(); sairDaVariante();
+    } else if(e.key==='ArrowLeft'){ e.preventDefault(); navegarVariante('ant'); }
+    else if(e.key==='ArrowRight'){ e.preventDefault(); navegarVariante('prox'); }
+    else if(e.key==='Home'){ e.preventDefault(); navegarVariante('inicio'); }
+    else if(e.key==='End'){ e.preventDefault(); navegarVariante('fim'); }
+    return;
+  }
   if(e.key==='ArrowLeft'){ e.preventDefault(); stepTo(Math.max(0,state.currentPly-1)); }
   else if(e.key==='ArrowRight'){ e.preventDefault(); stepTo(Math.min(game.fens.length-1,state.currentPly+1)); }
   else if(e.key==='Home'){ e.preventDefault(); stepTo(0); }

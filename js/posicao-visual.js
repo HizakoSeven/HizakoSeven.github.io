@@ -19,6 +19,14 @@ var tokenVivo = 0;
 var timerVivo = null;
 var pendente = false;
 
+/* Posicao mostrada agora: a da variante (se ativa nessa partida) ou a da partida. */
+export function fenAtual(game){
+  var v = state.variante;
+  if(v && v.gameId===game.id) return v.fens[v.cursor];
+  return game.fens[state.currentPly];
+}
+function emVariante(game){ return !!(state.variante && state.variante.gameId===game.id); }
+
 var observador = null;
 /* A aba Analise registra aqui uma funcao chamada a cada vez que a posicao mostrada (ou sua avaliacao) muda. */
 export function registrarObservadorPosicao(fn){ observador = fn; }
@@ -26,15 +34,15 @@ export function registrarObservadorPosicao(fn){ observador = fn; }
 /* O que se sabe da posicao atual: { pos, fen, ply, estado:'ok'|'esperando'|'sem'|'desligado'|'falhou', fonte } */
 export function infoPosicaoAtual(game){
   var vis = getPrefsVis();
-  var ply = state.currentPly, fen = game.fens[ply];
-  var salva = posicaoSalva(game, ply);
+  var ply = state.currentPly, fen = fenAtual(game);
+  var salva = emVariante(game) ? null : posicaoSalva(game, ply); /* a analise salva e da PARTIDA, nao da variante */
   var pos = salva || posicaoTerminal(fen), fonte = salva ? 'salva' : (pos ? 'final' : null);
   if(!pos){
     var v = vivoCache.get(fen+'|'+mpvAoVivo(vis));
     if(v){ pos = v; fonte = 'ao vivo'; }
   }
   var estado = pos ? 'ok' : (engineState==='falhou' ? 'falhou' : (pendente ? 'esperando' : (vis.aoVivo ? 'sem' : 'desligado')));
-  return { pos:pos, fen:fen, ply:ply, estado:estado, fonte:fonte };
+  return { pos:pos, fen:fen, ply:ply, estado:estado, fonte:fonte, variante:emVariante(game) };
 }
 
 function jogoAberto(){ return state.partidas.find(function(g){ return g.id===state.openGameId; }) || null; }
@@ -70,7 +78,7 @@ export function montarSetas(game, ply, fen, pos, vis){
     if(vis.quando==='minhaVez' && !minhaVez) return [];
     if(vis.quando==='vezAdv' && minhaVez) return [];
   }
-  if(vis.soErrosCp>0){
+  if(ply!==null && vis.soErrosCp>0){
     var info = game.analiseMotor && game.analiseMotor.porPly && game.analiseMotor.porPly[ply+1];
     if(info && info.perda<=vis.soErrosCp) return []; /* sem dado do lance seguinte: nao da pra filtrar, mostra */
   }
@@ -82,7 +90,7 @@ export function montarSetas(game, ply, fen, pos, vis){
       if(s) setas.push(s);
     });
   }
-  var mvReal = game.applied[ply];
+  var mvReal = ply!==null ? game.applied[ply] : null; /* na variante nao ha "lance jogado" */
   if(vis.setaJogado && mvReal && (mvReal.from+mvReal.to)!==(pos.m||'').slice(0,4)){
     setas.push({ from:mvReal.from, to:mvReal.to, cor:vis.corJogado, largura:larg });
   }
@@ -141,7 +149,7 @@ function pedirAoVivo(game, ply, fen, vis, chave){
       var linhas = (res && res.linhas) || [];
       var pos = linhas.length ? compactarPosicao(linhas, fen) : null;
       if(pos) guardarVivo(chave, pos);
-      if(state.openGameId!==game.id || state.currentPly!==ply) return;
+      if(state.openGameId!==game.id || fenAtual(game)!==fen) return; /* o usuario ja foi pra outra posicao */
       desenhar(game, ply, fen, pos, getPrefsVis());
     }, { movetimeMs: vis.aoVivoMs, multiPv: mpvAoVivo(vis) });
   }, VIVO_DEBOUNCE_MS);
@@ -153,8 +161,9 @@ export function atualizarVisualPosicao(game){
   if(!game) return;
   var vis = getPrefsVis();
   aplicarLayout(vis);
-  var ply = state.currentPly, fen = game.fens[ply];
-  var pos = posicaoSalva(game, ply) || posicaoTerminal(fen);
+  var variante = emVariante(game);
+  var ply = variante ? null : state.currentPly, fen = fenAtual(game);
+  var pos = (variante ? null : posicaoSalva(game, ply)) || posicaoTerminal(fen);
   var chave = fen+'|'+mpvAoVivo(vis);
   if(!pos){
     var viva = vivoCache.get(chave);
